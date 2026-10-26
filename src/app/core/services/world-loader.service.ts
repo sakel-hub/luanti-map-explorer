@@ -1781,7 +1781,7 @@ export class WorldLoaderService {
     mz: number,
     macroMipmap: Map<string, MacroMipmapCell>,
     nodeCounts: Record<string, number>,
-    stride: 2 | 4 = 2
+    stride: 1 | 2 | 4 = 2
   ): Promise<Array<[string, MacroMipmapCell]>> {
     const newMips: Array<[string, MacroMipmapCell]> = [];
     if (!this.activeBtreeReader) return newMips;
@@ -1794,7 +1794,7 @@ export class WorldLoaderService {
     const slice = this.mapStore.verticalSlice();
     const { minBy, maxBy } = this.getEffectiveBlockYRange();
     const effectiveMaxBy = stride === 4 && slice.presetId === 'surface' ? Math.min(maxBy, 4) : maxBy;
-    const maxSectorResults = stride === 4 ? 512 : 2048;
+    const maxSectorResults = stride === 4 ? 512 : stride === 2 ? 2048 : 4096;
 
     const rows = await this.activeBtreeReader.queryBlocksInBounds(
       minBx,

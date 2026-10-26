@@ -604,7 +604,7 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
   } {
     const z = this.mapStore.cameraState().zoom;
     if (z < 2.7) return this.zoomLodPresets[0];
-    if (z < 3.5) return this.zoomLodPresets[1];
+    if (z < 3.8) return this.zoomLodPresets[1];
     if (z < 6.0) return this.zoomLodPresets[2];
     return this.zoomLodPresets[3];
   }
