@@ -37,7 +37,6 @@ yarn-error.log
 .aider*
 *.system_generated
 .system_generated/
-scripts/verify.mjs
 *.py
 __pycache__/
 *.pyc
