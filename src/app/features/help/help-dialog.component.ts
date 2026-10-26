@@ -57,9 +57,13 @@ type HelpTab = 'worldFolder' | 'voronoi' | 'sqlite' | 'controls';
         </div>
 
         <!-- Navigation Tabs -->
-        <div class="flex border-b border-slate-800 bg-slate-950/60 overflow-x-auto px-4 gap-1 text-xs font-medium">
+        <div role="tablist" aria-label="Help Guide Sections" class="flex border-b border-slate-800 bg-slate-950/60 overflow-x-auto px-4 gap-1 text-xs font-medium">
           <button
+            id="help-tab-worldFolder"
             type="button"
+            role="tab"
+            aria-controls="help-tabpanel"
+            [attr.aria-selected]="activeTab() === 'worldFolder'"
             (click)="activeTab.set('worldFolder')"
             [class.text-sky-400]="activeTab() === 'worldFolder'"
             [class.border-sky-500]="activeTab() === 'worldFolder'"
@@ -67,7 +71,11 @@ type HelpTab = 'worldFolder' | 'voronoi' | 'sqlite' | 'controls';
             {{ 'help.tabWorldFolder' | translate }}
           </button>
           <button
+            id="help-tab-voronoi"
             type="button"
+            role="tab"
+            aria-controls="help-tabpanel"
+            [attr.aria-selected]="activeTab() === 'voronoi'"
             (click)="activeTab.set('voronoi')"
             [class.text-sky-400]="activeTab() === 'voronoi'"
             [class.border-sky-500]="activeTab() === 'voronoi'"
@@ -75,7 +83,11 @@ type HelpTab = 'worldFolder' | 'voronoi' | 'sqlite' | 'controls';
             {{ 'help.tabVoronoi' | translate }}
           </button>
           <button
+            id="help-tab-sqlite"
             type="button"
+            role="tab"
+            aria-controls="help-tabpanel"
+            [attr.aria-selected]="activeTab() === 'sqlite'"
             (click)="activeTab.set('sqlite')"
             [class.text-sky-400]="activeTab() === 'sqlite'"
             [class.border-sky-500]="activeTab() === 'sqlite'"
@@ -83,7 +95,11 @@ type HelpTab = 'worldFolder' | 'voronoi' | 'sqlite' | 'controls';
             {{ 'help.tabSqlite' | translate }}
           </button>
           <button
+            id="help-tab-controls"
             type="button"
+            role="tab"
+            aria-controls="help-tabpanel"
+            [attr.aria-selected]="activeTab() === 'controls'"
             (click)="activeTab.set('controls')"
             [class.text-sky-400]="activeTab() === 'controls'"
             [class.border-sky-500]="activeTab() === 'controls'"
@@ -93,7 +109,11 @@ type HelpTab = 'worldFolder' | 'voronoi' | 'sqlite' | 'controls';
         </div>
 
         <!-- Tab Content Body -->
-        <div class="p-5 overflow-y-auto space-y-4 text-xs text-slate-300 leading-relaxed max-h-[60vh]">
+        <div
+          id="help-tabpanel"
+          role="tabpanel"
+          [attr.aria-labelledby]="'help-tab-' + activeTab()"
+          class="p-5 overflow-y-auto space-y-4 text-xs text-slate-300 leading-relaxed max-h-[60vh]">
           <!-- Tab 1: World Folders -->
           @if (activeTab() === 'worldFolder') {
             <div class="space-y-4">
@@ -121,9 +141,9 @@ type HelpTab = 'worldFolder' | 'voronoi' | 'sqlite' | 'controls';
                   </p>
                 </div>
                 <div class="p-3.5 bg-slate-950/50 rounded-lg border border-slate-800/80">
-                  <div class="font-semibold text-purple-400 font-mono mb-1">map.sqlite</div>
+                  <div class="font-semibold text-purple-400 font-mono mb-1">map.sqlite / map.sql</div>
                   <p class="text-slate-400 text-[11px]">
-                    Decodes saved 16×16×16 MapBlocks directly in the browser to overlay player buildings and explored terrain.
+                    Decodes saved 16×16×16 MapBlocks directly in the browser (SQLite B-Tree or PostgreSQL COPY dump) to overlay player buildings and explored terrain.
                   </p>
                 </div>
               </div>
@@ -152,7 +172,7 @@ type HelpTab = 'worldFolder' | 'voronoi' | 'sqlite' | 'controls';
             </div>
           }
 
-          <!-- Tab 3: SQLite Format -->
+          <!-- Tab 3: SQLite & PostgreSQL Formats -->
           @if (activeTab() === 'sqlite') {
             <div class="space-y-3">
               <div class="bg-slate-950/70 p-4 rounded-xl border border-slate-800">
@@ -161,7 +181,7 @@ type HelpTab = 'worldFolder' | 'voronoi' | 'sqlite' | 'controls';
                   <span>Luanti 64-bit Block Packing &amp; MapBlock v28/v29</span>
                 </h3>
                 <p class="mb-2">
-                  Luanti stores 16×16×16 node MapBlocks in <code>blocks(pos INT64 PRIMARY KEY, data BLOB)</code>. Each block position is packed using three 12-bit signed integers:
+                  Luanti stores 16×16×16 node MapBlocks in both SQLite (<code>blocks(pos INT64 PRIMARY KEY, data BLOB)</code>) and PostgreSQL (<code>blocks(pos BIGINT PRIMARY KEY, data BYTEA)</code>). Each block position is packed using three 12-bit signed integers:
                 </p>
                 <div class="p-2.5 bg-slate-900 rounded font-mono text-[11px] text-amber-300 border border-slate-800">
                   pos = (z &lt;&lt; 24) | (y &lt;&lt; 12) | x
@@ -169,6 +189,21 @@ type HelpTab = 'worldFolder' | 'voronoi' | 'sqlite' | 'controls';
                 <p class="mt-2 text-slate-400 text-[11px]">
                   This explorer supports both modern Luanti MapBlock <strong>v29 (Zstandard / zstd)</strong> and legacy <strong>v24–v28 (zlib)</strong> payloads, extracting the <code>NameIdMapping</code> dictionary and scanning each column top-down for surface nodes.
                 </p>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="p-3 bg-slate-950/50 rounded-lg border border-slate-800/80">
+                  <div class="font-semibold text-sky-400 mb-1">SQLite Backend (map.sqlite)</div>
+                  <p class="text-slate-400 text-[11px]">
+                    Read directly in-browser using our zero-dependency streaming B-Tree reader. No wasm or SQL server required.
+                  </p>
+                </div>
+                <div class="p-3 bg-slate-950/50 rounded-lg border border-slate-800/80">
+                  <div class="font-semibold text-emerald-400 mb-1">PostgreSQL Backend (map.sql)</div>
+                  <p class="text-slate-400 text-[11px]">
+                    Supports dumps created via <code>pg_dump -t blocks -d luanti_world &gt; map.sql</code>. Streamed in 2MB chunks without running out of browser memory.
+                  </p>
+                </div>
               </div>
             </div>
           }
@@ -189,8 +224,8 @@ type HelpTab = 'worldFolder' | 'voronoi' | 'sqlite' | 'controls';
                 <div class="font-semibold text-emerald-400 mb-1.5">Viewing Modes (1 / 2 / H)</div>
                 <ul class="space-y-1.5 text-[11px] text-slate-300">
                   <li><strong>Seed Mode (1):</strong> Pure procedural biomes &amp; elevation from seed</li>
-                  <li><strong>SQLite DB Mode (2):</strong> Saved <code>map.sqlite</code> blocks only</li>
-                  <li><strong>Hybrid Mode (H):</strong> Saved SQLite player builds overlaid onto the procedural seed map</li>
+                  <li><strong>Database Mode (2):</strong> Saved <code>map.sqlite</code> or <code>map.sql</code> blocks only</li>
+                  <li><strong>Hybrid Mode (H):</strong> Saved player builds overlaid onto the procedural seed map</li>
                 </ul>
               </div>
             </div>

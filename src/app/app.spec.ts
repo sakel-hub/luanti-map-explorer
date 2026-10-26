@@ -7,10 +7,18 @@ import {
   parseAndMergeCoarseBlockMipmap,
   buildDemoWorldDatabase,
   lookupWorldColumn,
+  isFoliageOrSpikeNode,
+  isNaturalTerrainGroundNode,
   isPlayerStructuralNode,
+  classifyColumnExtrusionKind,
   mergeParsedBlockIntoCompactSurface
 } from './core/utils/mapblock-parser';
-import { LuantiWorldSynthesizer, createDefaultNoiseParams } from './core/utils/perlin-noise';
+import {
+  LuantiNoise2D,
+  LuantiWorldSynthesizer,
+  createDefaultNoiseParams,
+  sampleMipmapClimateAnchor
+} from './core/utils/perlin-noise';
 import { CoordProjectionService } from './core/services/coord-projection.service';
 import { renderTilePngBuffer } from './core/utils/tile-renderer';
 import { encodeRgbaToPngBuffer } from './core/utils/png-encoder';
@@ -27,8 +35,13 @@ import { resolveNodeColor, LUANTI_NODE_COLORS } from './core/data/node-colors';
 import { MapStore } from './core/state/map.store';
 import { WorkerPoolService } from './core/services/worker-pool.service';
 import { WorldLoaderService } from './core/services/world-loader.service';
+import { KeyboardShortcutsService } from './core/services/keyboard-shortcuts.service';
+import { TranslationService } from './core/i18n/translation.service';
+import { SUPPORTED_LOCALES } from './core/i18n/translation.types';
 import { Injector, runInInjectionContext } from '@angular/core';
 import { SqliteFileBtreeReader } from './core/utils/sqlite-btree-reader';
+import { PostgresSqlDumpReader } from './core/utils/postgres-dump-reader';
+import { safeClearStorage } from './core/utils/storage.utils';
 import * as fs from 'fs';
 
 describe('Luanti Map & Biome Explorer Core Engine', () => {
@@ -241,6 +254,97 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
       demoDb.macroMipmap
     );
     expect(new Uint8Array(zoomedInFallbackPng)[0]).toBe(137);
+  });
+
+  it('enforces uniform 16n block-average smoothing at Zoom 4.5 and per-voxel detail at Zoom 7.2', () => {
+    const noises = createDefaultNoiseParams();
+    const testBlocks = new Map<string, CompactBlockSurface>();
+    const topYArray = new Int16Array(256);
+    topYArray.fill(10);
+    for (let i = 0; i < 256; i += 2) topYArray[i] = 20;
+
+    testBlocks.set('0,0', {
+      bx: 0,
+      bz: 0,
+      rgb: new Uint8Array(256 * 3).fill(120),
+      topY: topYArray,
+      waterDepth: new Uint8Array(256).fill(0),
+      avgY: 15,
+      avgColor: [120, 120, 120],
+      dominantNode: 'default:dirt_with_grass'
+    });
+
+    const testMipmap = new Map<string, MacroMipmapCell>();
+    testMipmap.set('b:0,0', {
+      bx: 0,
+      bz: 0,
+      r: 120,
+      g: 120,
+      b: 120,
+      y: 15,
+      waterDepth: 0,
+      dominantNode: 'default:dirt_with_grass'
+    });
+
+    const demSector45Png = renderTilePngBuffer(
+      {
+        jobId: 201,
+        cameraZoom: 4.5,
+        tileKind: 'terrain-dem',
+        tileSize: 16,
+        minX: 0,
+        maxX: 16,
+        minZ: 0,
+        maxZ: 16,
+        seed: 74829104,
+        mapgen: 'v7',
+        waterLevel: 1,
+        heatNoise: noises.heatNoise,
+        humidityNoise: noises.humidityNoise,
+        terrainNoise: noises.terrainNoise,
+        viewMode: 'db',
+        hypsometricMode: false,
+        hillshadeEnabled: true,
+        voronoiContoursEnabled: false,
+        exploredBoundsEnabled: false,
+        isolatedBiomeId: null
+      },
+      new Map(),
+      new Set(),
+      testBlocks,
+      testMipmap
+    );
+    expect(new Uint8Array(demSector45Png)[0]).toBe(137);
+
+    const demVoxel72Png = renderTilePngBuffer(
+      {
+        jobId: 202,
+        cameraZoom: 7.2,
+        tileKind: 'terrain-dem',
+        tileSize: 16,
+        minX: 0,
+        maxX: 16,
+        minZ: 0,
+        maxZ: 16,
+        seed: 74829104,
+        mapgen: 'v7',
+        waterLevel: 1,
+        heatNoise: noises.heatNoise,
+        humidityNoise: noises.humidityNoise,
+        terrainNoise: noises.terrainNoise,
+        viewMode: 'db',
+        hypsometricMode: false,
+        hillshadeEnabled: true,
+        voronoiContoursEnabled: false,
+        exploredBoundsEnabled: false,
+        isolatedBiomeId: null
+      },
+      new Map(),
+      new Set(),
+      testBlocks,
+      testMipmap
+    );
+    expect(new Uint8Array(demVoxel72Png)[0]).toBe(137);
 
     // Verify dynamic Everness mod biome Voronoi discovery preserves authentic climate coordinates across surface, ocean, and underground
     const coralBiome = buildDiscoveredBiomeDefinition('everness:dirt_with_coral_grass', 50, 50);
@@ -877,4 +981,782 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     const autoEthereal = store.activeBiomes();
     expect(autoEthereal.some(b => b.id === 'ethereal_bamboo')).toBe(true);
   });
+
+  it('prevents cyan #38bdf8 grid stripes across macroMipmap blocks and suppresses coarse 2x2/4x4 border bleed', () => {
+    const noises = createDefaultNoiseParams();
+    // Set up a 2x2 macroMipmap cell at (0,0) covering blocks (0,0), (1,0), (0,1), (1,1)
+    const mipOnly = new Map([
+      [
+        '0,0',
+        {
+          mcx: 0,
+          mcz: 0,
+          r: 210,
+          g: 180,
+          b: 120,
+          y: 12,
+          waterDepth: 0,
+          nodeName: 'default:desert_sand'
+        }
+      ]
+    ]);
+
+    // Render across X: [0..32], Z: [0..32] with stepX = 1.0 (< 4) and exploredBoundsEnabled = true.
+    // The internal boundary between block (0,0) and block (1,0) at worldX = 15..16 must NOT be painted cyan (56, 189, 248)
+    // because both blocks are covered by macroMipmap ('0,0').
+    const pngBuf = renderTilePngBuffer(
+      {
+        jobId: 201,
+        tileKind: 'color',
+        tileSize: 32,
+        minX: 0,
+        maxX: 32,
+        minZ: 0,
+        maxZ: 32,
+        seed: 74829104,
+        mapgen: 'v7',
+        waterLevel: 1,
+        heatNoise: noises.heatNoise,
+        humidityNoise: noises.humidityNoise,
+        terrainNoise: noises.terrainNoise,
+        viewMode: 'hybrid',
+        hypsometricMode: false,
+        hillshadeEnabled: false,
+        voronoiContoursEnabled: false,
+        exploredBoundsEnabled: true,
+        isolatedBiomeId: null
+      },
+      new Map(),
+      new Set(),
+      new Map(),
+      mipOnly
+    );
+
+    // Decode the PNG IDAT payload via pako to inspect pixel colors at the internal block seam (px = 15, py = 16 -> worldX = 15, worldZ = 16)
+    const pngBytes = new Uint8Array(pngBuf);
+    // Find IDAT chunk (starts at offset 8 + 25 = 33; length in 33..36, 'IDAT' in 37..40, data at 41)
+    const idatLen =
+      (pngBytes[33] << 24) | (pngBytes[34] << 16) | (pngBytes[35] << 8) | pngBytes[36];
+    const rawScanlines = pako.inflate(pngBytes.subarray(41, 41 + idatLen));
+    const rowStride = 1 + 32 * 4;
+    // Center of tile (py = 16, px = 15 -> localX = 15 on internal seam between blockX=0 and blockX=1, localZ = 15 on internal seam between blockZ=0 and blockZ=1)
+    const seamOffset = 16 * rowStride + 1 + 15 * 4;
+    const seamR = rawScanlines[seamOffset];
+    const seamG = rawScanlines[seamOffset + 1];
+    const seamB = rawScanlines[seamOffset + 2];
+    expect([seamR, seamG, seamB]).not.toEqual([56, 189, 248]);
+
+    // Now verify that when block (0,0) has an exact 1x1 `b:0,0` entry alongside a stale `0,0` or `m4:0,0` entry,
+    // unexplored sibling block (1,0) does NOT bleed the coarse `0,0` or `m4:0,0` entry (even at stepX = 4.0 >= 2.0 in DB mode)
+    const mixedMipmap = new Map([
+      [
+        'b:0,0',
+        {
+          mcx: 0,
+          mcz: 0,
+          r: 220,
+          g: 190,
+          b: 110,
+          y: 15,
+          waterDepth: 0,
+          nodeName: 'default:desert_sand'
+        }
+      ],
+      [
+        '0,0',
+        {
+          mcx: 0,
+          mcz: 0,
+          r: 220,
+          g: 190,
+          b: 110,
+          y: 15,
+          waterDepth: 0,
+          nodeName: 'default:desert_sand'
+        }
+      ],
+      [
+        'm4:0,0',
+        {
+          mcx: 0,
+          mcz: 0,
+          r: 220,
+          g: 190,
+          b: 110,
+          y: 15,
+          waterDepth: 0,
+          nodeName: 'default:desert_sand'
+        }
+      ]
+    ]);
+
+    const dbOnlyBuf = renderTilePngBuffer(
+      {
+        jobId: 202,
+        tileKind: 'color',
+        tileSize: 16,
+        minX: 0,
+        maxX: 64,
+        minZ: 0,
+        maxZ: 64,
+        seed: 74829104,
+        mapgen: 'v7',
+        waterLevel: 1,
+        heatNoise: noises.heatNoise,
+        humidityNoise: noises.humidityNoise,
+        terrainNoise: noises.terrainNoise,
+        viewMode: 'db',
+        hypsometricMode: false,
+        hillshadeEnabled: false,
+        voronoiContoursEnabled: false,
+        exploredBoundsEnabled: false,
+        isolatedBiomeId: null
+      },
+      new Map(),
+      new Set(),
+      new Map(),
+      mixedMipmap
+    );
+    const dbPngBytes = new Uint8Array(dbOnlyBuf);
+    const dbIdatLen =
+      (dbPngBytes[33] << 24) | (dbPngBytes[34] << 16) | (dbPngBytes[35] << 8) | dbPngBytes[36];
+    const dbScanlines = pako.inflate(dbPngBytes.subarray(41, 41 + dbIdatLen));
+    const dbRowStride = 1 + 16 * 4;
+    // py = 14 (near Z = 0, blockZ = 0), px = 6 (worldX = 24 -> blockX = 1, which is unexplored sibling of block (0,0))
+    // In 'db' viewMode, unexplored blocks render as dark slate void [11, 16, 26] rather than desert sand [220, 190, 110]
+    const siblingOffset = 14 * dbRowStride + 1 + 6 * 4;
+    expect([
+      dbScanlines[siblingOffset],
+      dbScanlines[siblingOffset + 1],
+      dbScanlines[siblingOffset + 2]
+    ]).toEqual([11, 16, 26]);
+  });
+
+  it('purges aborted tile requests via AbortSignal in WorkerPoolService to prevent MapLibre concurrency starvation', async () => {
+    const injector = Injector.create({
+      providers: [
+        { provide: MapStore, useFactory: () => new MapStore() },
+        { provide: CoordProjectionService, useFactory: () => new CoordProjectionService() },
+        { provide: PwaStorageService, useFactory: () => new PwaStorageService() }
+      ]
+    });
+    const workerPool = runInInjectionContext(injector, () => new WorkerPoolService());
+
+    const mockWorkerInstance = {
+      worker: { postMessage: () => {} },
+      busy: true,
+      activeJobId: 888
+    };
+    (workerPool as any).pool.push(mockWorkerInstance);
+
+    const abortController = new AbortController();
+    const pAborted = workerPool.requestTile('color', 4, 2, 3, 1, abortController.signal);
+
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(((workerPool as any).queue as any[]).length).toBe(1);
+
+    // Abort the tile request (simulating MapLibre cancelling an off-screen tile during drag/zoom)
+    abortController.abort();
+    expect(((workerPool as any).queue as any[]).length).toBe(0);
+
+    await expect(pAborted).rejects.toThrow();
+  });
+
+  it('parses world seeds from map_meta.txt preserving backward compatibility', () => {
+    const raw64Str = '1234567890123456789';
+    const numSeed = Number(raw64Str.trim().slice(-9));
+    expect(numSeed).toBe(123456789);
+
+    const standardSeedStr = '74829104';
+    const standardSeed = Number(standardSeedStr.trim().slice(-9));
+    expect(standardSeed).toBe(74829104);
+  });
+
+  it('separates ground elevation groundY from foliage/bamboo topY to prevent 3D terrain needle spikes', () => {
+    expect(isFoliageOrSpikeNode('default:leaves')).toBe(true);
+    expect(isFoliageOrSpikeNode('default:bamboo')).toBe(true);
+    expect(isFoliageOrSpikeNode('default:cactus')).toBe(true);
+    expect(isFoliageOrSpikeNode('default:apple')).toBe(true);
+    expect(isFoliageOrSpikeNode('default:fern_1')).toBe(true);
+    expect(isFoliageOrSpikeNode('default:tree')).toBe(true);
+    expect(isFoliageOrSpikeNode('everness:coral_tree')).toBe(true);
+    expect(isFoliageOrSpikeNode('default:dirt_with_grass')).toBe(false);
+    expect(isFoliageOrSpikeNode('default:stone')).toBe(false);
+    expect(isFoliageOrSpikeNode('everness:dirt_with_coral_grass')).toBe(false);
+    expect(isFoliageOrSpikeNode('everness:coral_sand')).toBe(false);
+    expect(isFoliageOrSpikeNode('everness:coral_desert_stone')).toBe(false);
+
+    expect(isNaturalTerrainGroundNode('everness:dirt_with_coral_grass')).toBe(true);
+    expect(isNaturalTerrainGroundNode('everness:coral_sand')).toBe(true);
+    expect(isNaturalTerrainGroundNode('default:dirt_with_grass')).toBe(true);
+    expect(isNaturalTerrainGroundNode('default:stonebrick')).toBe(false);
+    expect(isNaturalTerrainGroundNode('default:wood')).toBe(false);
+    expect(isNaturalTerrainGroundNode('default:leaves')).toBe(false);
+
+    expect(isPlayerStructuralNode('default:wood')).toBe(true);
+    expect(isPlayerStructuralNode('default:stonebrick')).toBe(true);
+    expect(isPlayerStructuralNode('default:cobble')).toBe(true);
+    expect(isPlayerStructuralNode('default:glass')).toBe(true);
+    expect(isPlayerStructuralNode('default:dirt')).toBe(false);
+
+    const blockSurfaces = new Map<string, any>();
+    const macroMipmap = new Map<string, any>();
+    const nodeCounts: Record<string, number> = {};
+
+    const mockSummary: any = {
+      blockX: 0,
+      blockY: 0,
+      blockZ: 0,
+      dominantNode: 'default:bamboo',
+      columns: [
+        {
+          localX: 2,
+          localZ: 3,
+          topLocalY: 14, // Bamboo stalk reaches Y = 14
+          groundLocalY: 4, // Bare soil/ground underneath is at Y = 4
+          nodeName: 'default:bamboo',
+          waterCount: 0
+        },
+        {
+          localX: 4,
+          localZ: 5,
+          topLocalY: 6,
+          groundLocalY: 6,
+          nodeName: 'default:dirt_with_grass',
+          waterCount: 0
+        }
+      ]
+    };
+
+    const blk = mergeParsedBlockIntoCompactSurface(
+      mockSummary,
+      -32000,
+      32000,
+      blockSurfaces,
+      macroMipmap,
+      nodeCounts
+    );
+
+    expect(blk).toBeDefined();
+    const bambooIdx = (3 << 4) | 2;
+    expect(blk!.topY[bambooIdx]).toBe(14); // Preserved for color drape
+    expect(blk!.groundY![bambooIdx]).toBe(4); // DTM ground elevation stripped of needle spike
+
+    const grassIdx = (5 << 4) | 4;
+    expect(blk!.topY[grassIdx]).toBe(6);
+    expect(blk!.groundY![grassIdx]).toBe(6);
+
+    // Verify multi-block vertical column merging (top-down blockY = 1 canopy/roof -> blockY = 0 natural ground)
+    const multiBlockSurfaces = new Map<string, any>();
+    const multiMipmap = new Map<string, any>();
+    const upperCanopyAndRoofBlock: any = {
+      blockX: 2,
+      blockY: 1, // Y = 16..31
+      blockZ: 3,
+      dominantNode: 'default:leaves',
+      columns: [
+        {
+          localX: 1,
+          localZ: 1,
+          topLocalY: 8, // Canopy at Y = 24
+          groundLocalY: undefined, // No natural ground inside blockY = 1
+          nodeName: 'default:leaves',
+          waterCount: 0
+        },
+        {
+          localX: 2,
+          localZ: 1,
+          topLocalY: 6, // Building roof at Y = 22
+          groundLocalY: undefined,
+          nodeName: 'default:stonebrick',
+          waterCount: 0
+        }
+      ]
+    };
+    const lowerGroundBlock: any = {
+      blockX: 2,
+      blockY: 0, // Y = 0..15
+      blockZ: 3,
+      dominantNode: 'everness:dirt_with_coral_grass',
+      columns: [
+        {
+          localX: 1,
+          localZ: 1,
+          topLocalY: 15, // Trunk inside blockY = 0
+          groundLocalY: 5, // Coral forest ground at Y = 5
+          nodeName: 'everness:coral_tree',
+          waterCount: 0
+        },
+        {
+          localX: 2,
+          localZ: 1,
+          topLocalY: 15, // Wall inside blockY = 0
+          groundLocalY: 5, // Natural ground under building at Y = 5
+          nodeName: 'default:stonebrick',
+          waterCount: 0
+        }
+      ]
+    };
+
+    mergeParsedBlockIntoCompactSurface(
+      upperCanopyAndRoofBlock,
+      -32000,
+      32000,
+      multiBlockSurfaces,
+      multiMipmap,
+      {}
+    );
+    const mergedMulti = mergeParsedBlockIntoCompactSurface(
+      lowerGroundBlock,
+      -32000,
+      32000,
+      multiBlockSurfaces,
+      multiMipmap,
+      {}
+    );
+
+    expect(mergedMulti).toBeDefined();
+    const treeColIdx = (1 << 4) | 1;
+    const roofColIdx = (1 << 4) | 2;
+    expect(mergedMulti!.topY[treeColIdx]).toBe(24);
+    expect(mergedMulti!.groundY![treeColIdx]).toBe(5);
+    expect(mergedMulti!.topY[roofColIdx]).toBe(22);
+    expect(mergedMulti!.groundY![roofColIdx]).toBe(5);
+    expect(mergedMulti!.avgY).toBe(5);
+  });
+
+  it('controls 3D building extrusions state in MapStore', () => {
+    safeClearStorage();
+    const store = new MapStore();
+    expect(store.buildingExtrusions3dEnabled()).toBe(false);
+
+    store.setBuildingExtrusions3dEnabled(true);
+    expect(store.buildingExtrusions3dEnabled()).toBe(true);
+
+    store.setBuildingExtrusions3dEnabled(false);
+    expect(store.buildingExtrusions3dEnabled()).toBe(false);
+  });
+
+  it('disables Voronoi biome borders by default and toggles on demand in MapStore', () => {
+    const store = new MapStore();
+    expect(store.voronoiContoursEnabled()).toBe(false);
+
+    const prevRev = store.renderRevision();
+    store.toggleVoronoiContours();
+    expect(store.voronoiContoursEnabled()).toBe(true);
+    expect(store.renderRevision()).toBe(prevRev + 1);
+
+    store.toggleVoronoiContours();
+    expect(store.voronoiContoursEnabled()).toBe(false);
+  });
+
+  it('matches authentic Luanti C++ noise2d and anchors Hybrid bathymetry/coastlines to SQLite ocean & land', () => {
+    // 1. Verify Luanti C++ hash2d determinism and [-1, 1] range
+    const h1 = LuantiNoise2D.hash2d(120, -340, 74829104);
+    const h2 = LuantiNoise2D.hash2d(120, -340, 74829104);
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThanOrEqual(-1.0);
+    expect(h1).toBeLessThanOrEqual(1.0);
+
+    // 2. Verify Hybrid bathymetric anchoring turns unexplored pixels adjacent to SQLite ocean into ocean
+    const noises = createDefaultNoiseParams();
+    const synth = new LuantiWorldSynthesizer(
+      74829104,
+      'v7',
+      1,
+      noises.heatNoise,
+      noises.humidityNoise,
+      noises.terrainNoise
+    );
+
+    const oceanMipmap = new Map<string, any>([
+      [
+        '0,0',
+        {
+          mcx: 0,
+          mcz: 0,
+          r: 39,
+          g: 146,
+          b: 219,
+          y: 1,
+          waterDepth: 12,
+          nodeName: 'default:water_source'
+        }
+      ]
+    ]);
+
+    // Sample anchor immediately adjacent to explored ocean cell '0,0' (at worldX = 40, worldZ = 16 -> mcx = 1, mcz = 0)
+    const anchor = sampleMipmapClimateAnchor(40, 16, oceanMipmap, DEFAULT_LUANTI_BIOMES, null, 1);
+    expect(anchor).not.toBeNull();
+    expect(anchor!.elev).toBeLessThan(1); // Bathymetric depth below waterLevel (1)
+    expect(anchor!.elevBlend).toBeGreaterThan(0.85);
+
+    const anchoredPt = synth.evaluatePointWithClimateAnchor(
+      40,
+      16,
+      anchor!.heat,
+      anchor!.humidity,
+      anchor!.blend,
+      undefined,
+      false,
+      anchor!.elev,
+      anchor!.elevBlend
+    );
+    expect(anchoredPt.elevation).toBeLessThan(1);
+  });
+
+  it('excludes Everness Mineral Waters pool bricks & ship sails from 3D extrusions while extruding Bamboo & Crystal Pillars', () => {
+    // 1. Everness Mineral Waters travertine pool bricks must resolve to travertine color (not red brick) and never extrude
+    expect(resolveNodeColor('everness:mineral_stone_brick')).toEqual([222, 208, 192]);
+    expect(isPlayerStructuralNode('everness:mineral_stone_brick')).toBe(false);
+    expect(isPlayerStructuralNode('everness:mineral_stone_brick_with_growth')).toBe(false);
+    expect(isNaturalTerrainGroundNode('everness:mineral_stone_brick')).toBe(true);
+    expect(classifyColumnExtrusionKind('everness:mineral_stone_brick')).toBe(0);
+
+    // 2. Shipwreck wool sails, fences, and chests must not extrude as 3D monolith walls
+    expect(classifyColumnExtrusionKind('wool:white')).toBe(0);
+    expect(classifyColumnExtrusionKind('default:fence_wood')).toBe(0);
+    expect(classifyColumnExtrusionKind('default:chest_locked')).toBe(0);
+
+    // 3. Bamboo stalks and Crystal Pillars must classify as extrusion kinds 2 and 3, while real masonry walls classify as 1
+    expect(classifyColumnExtrusionKind('everness:bamboo_1')).toBe(2);
+    expect(classifyColumnExtrusionKind('everness:bamboo_leaves')).toBe(2);
+    expect(classifyColumnExtrusionKind('mcl_bamboo:bamboo')).toBe(2);
+    expect(classifyColumnExtrusionKind('everness:crystal_tree')).toBe(3);
+    expect(classifyColumnExtrusionKind('everness:crystal_pillar')).toBe(3);
+    expect(classifyColumnExtrusionKind('mcl_amethyst:amethyst_cluster')).toBe(3);
+    expect(classifyColumnExtrusionKind('default:stonebrick')).toBe(1);
+
+    // 4. Verify suspended overhang / ship sail with air gap below is cleared in CompactBlockSurface
+    const blockSurfaces = new Map<string, any>();
+    const macroMipmap = new Map<string, any>();
+    const merged = mergeParsedBlockIntoCompactSurface(
+      {
+        posKey: '0,0,0',
+        blockX: 0,
+        blockY: 0,
+        blockZ: 0,
+        version: 29,
+        nodeMapping: {},
+        columns: [
+          {
+            localX: 3,
+            localZ: 3,
+            topLocalY: 14,
+            groundLocalY: 2,
+            contiguousSpan: 3,
+            hasAirGapBelow: true, // Suspended roof/sail with open air underneath
+            nodeName: 'default:wood',
+            waterCount: 0
+          },
+          {
+            localX: 4,
+            localZ: 3,
+            topLocalY: 12,
+            groundLocalY: 4,
+            contiguousSpan: 8,
+            hasAirGapBelow: false, // Contiguous bamboo stalk from ground to top
+            nodeName: 'everness:bamboo_2',
+            waterCount: 0
+          },
+          {
+            localX: 5,
+            localZ: 3,
+            topLocalY: 15,
+            groundLocalY: 4,
+            contiguousSpan: 11,
+            hasAirGapBelow: false, // Contiguous crystal pillar from ground to top
+            nodeName: 'everness:crystal_tree',
+            waterCount: 0
+          }
+        ]
+      },
+      -32000,
+      32000,
+      blockSurfaces,
+      macroMipmap,
+      {}
+    );
+
+    expect(merged).not.toBeNull();
+    expect(merged!.extrusionKind![(3 << 4) | 3]).toBe(0); // Suspended overhang excluded
+    expect(merged!.extrusionKind![(3 << 4) | 4]).toBe(2); // Bamboo stalk included
+    expect(merged!.extrusionKind![(3 << 4) | 5]).toBe(3); // Crystal pillar included
+
+    // 5. Verify MapStore cycles through all 4 extrusion filter modes
+    safeClearStorage();
+    const store = new MapStore();
+    expect(store.extrusionFilterMode()).toBe('off');
+    expect(store.buildingExtrusions3dEnabled()).toBe(false);
+    store.cycleExtrusionFilterMode();
+    expect(store.extrusionFilterMode()).toBe('all');
+    expect(store.buildingExtrusions3dEnabled()).toBe(true);
+    store.cycleExtrusionFilterMode();
+    expect(store.extrusionFilterMode()).toBe('pillars');
+    expect(store.buildingExtrusions3dEnabled()).toBe(true);
+    store.cycleExtrusionFilterMode();
+    expect(store.extrusionFilterMode()).toBe('structures');
+    expect(store.buildingExtrusions3dEnabled()).toBe(true);
+    store.cycleExtrusionFilterMode();
+    expect(store.extrusionFilterMode()).toBe('off');
+    expect(store.buildingExtrusions3dEnabled()).toBe(false);
+  });
+
+  it('applies block-strided directional hillshading in Sector 1x1 macro tier (cameraZoom = 4.5) and cancels pending DEM tiles', async () => {
+    const noises = createDefaultNoiseParams();
+    const blockSurfaces = new Map<string, any>();
+
+    const makeBlock = (bx: number, bz: number, avgY: number) => ({
+      bx,
+      bz,
+      rgb: new Uint8Array(768).fill(120),
+      topY: new Int16Array(256).fill(avgY),
+      groundY: new Int16Array(256).fill(avgY),
+      waterDepth: new Uint8Array(256),
+      dominantNode: 'default:dirt_with_grass',
+      avgColor: [120, 160, 80] as [number, number, number],
+      avgY
+    });
+
+    // Create 3x3 blocks with a NW -> SE slope so block (0,0) has lower NW neighbor (-1,1) and higher SE neighbor (1,-1)
+    blockSurfaces.set('-1,1', makeBlock(-1, 1, 5));
+    blockSurfaces.set('0,0', makeBlock(0, 0, 15));
+    blockSurfaces.set('1,-1', makeBlock(1, -1, 25));
+
+    // Render block (0,0) at stepX = 2.0 (minX = 0, maxX = 16, size = 8) with cameraZoom = 4.5 (Sector 1x1)
+    const shadedPng = renderTilePngBuffer(
+      {
+        jobId: 901,
+        tileKind: 'color',
+        tileSize: 8,
+        cameraZoom: 4.5,
+        minX: 0,
+        maxX: 16,
+        minZ: 0,
+        maxZ: 16,
+        seed: 74829104,
+        mapgen: 'v7',
+        waterLevel: 1,
+        heatNoise: noises.heatNoise,
+        humidityNoise: noises.humidityNoise,
+        terrainNoise: noises.terrainNoise,
+        viewMode: 'db',
+        hypsometricMode: false,
+        hillshadeEnabled: true,
+        voronoiContoursEnabled: false,
+        exploredBoundsEnabled: false,
+        isolatedBiomeId: null
+      },
+      null,
+      null,
+      blockSurfaces,
+      null
+    );
+    const unshadedPng = renderTilePngBuffer(
+      {
+        jobId: 902,
+        tileKind: 'color',
+        tileSize: 8,
+        cameraZoom: 4.5,
+        minX: 0,
+        maxX: 16,
+        minZ: 0,
+        maxZ: 16,
+        seed: 74829104,
+        mapgen: 'v7',
+        waterLevel: 1,
+        heatNoise: noises.heatNoise,
+        humidityNoise: noises.humidityNoise,
+        terrainNoise: noises.terrainNoise,
+        viewMode: 'db',
+        hypsometricMode: false,
+        hillshadeEnabled: false,
+        voronoiContoursEnabled: false,
+        exploredBoundsEnabled: false,
+        isolatedBiomeId: null
+      },
+      null,
+      null,
+      blockSurfaces,
+      null
+    );
+
+    const decodeFirstPixel = (buf: ArrayBuffer) => {
+      const b = new Uint8Array(buf);
+      const len = (b[33] << 24) | (b[34] << 16) | (b[35] << 8) | b[36];
+      const raw = pako.inflate(b.subarray(41, 41 + len));
+      return [raw[1], raw[2], raw[3]];
+    };
+
+    const [sr, sg, sb] = decodeFirstPixel(shadedPng);
+    const [ur, ug, ub] = decodeFirstPixel(unshadedPng);
+    // Shaded macro tile must have positive directional sun highlight (not flat zero shade!)
+    expect(sr).toBeGreaterThan(ur);
+    expect(sg).toBeGreaterThan(ug);
+    expect(sb).toBeGreaterThan(ub);
+  });
+
+  it('validates 6-locale i18n dictionary completeness, ISO language codes, and synchronized keyboard shortcuts', () => {
+    // 1. All 6 locales use clean 2-letter ISO codes instead of platform-dependent emoji flags
+    expect(SUPPORTED_LOCALES.map(l => l.flag)).toEqual(['EN', 'SK', 'DE', 'FR', 'ES', 'RU']);
+
+    const i18n = new TranslationService();
+    for (const loc of SUPPORTED_LOCALES) {
+      i18n.setLocale(loc.id);
+      expect(i18n.t('voronoi.biomePaletteLabel')).not.toBe('voronoi.biomePaletteLabel');
+      expect(i18n.t('inspector.surfaceColumns')).not.toBe('inspector.surfaceColumns');
+      expect(i18n.t('markers.savedWaypoints')).not.toBe('markers.savedWaypoints');
+      expect(i18n.t('viewport.copyCoordsTooltip')).not.toBe('viewport.copyCoordsTooltip');
+      expect(i18n.t('header.offlineBadge')).not.toBe('header.offlineBadge');
+      expect(i18n.t('routes.trySampleRoute')).not.toBe('routes.trySampleRoute');
+    }
+
+    // 2. KeyboardShortcutsService registers N, O, P, S shortcuts and updates lastTriggeredAction
+    const injector = Injector.create({
+      providers: [
+        { provide: MapStore, useFactory: () => new MapStore() }
+      ]
+    });
+    const shortcuts = runInInjectionContext(injector, () => new KeyboardShortcutsService());
+    const ids = shortcuts.shortcuts.map(s => s.id);
+    expect(ids).toContain('reset_north');
+    expect(ids).toContain('open_world');
+    expect(ids).toContain('open_routes');
+    expect(ids).toContain('open_share');
+
+    shortcuts.handleKeyDown({ key: 'p', preventDefault: () => {} } as any);
+    expect(shortcuts.lastTriggeredAction()?.id).toBe('open_routes');
+  });
+
+  it('persists user settings across MapStore instances and supports discovered region visibility & popups', () => {
+    safeClearStorage();
+
+    // 1. Fresh store has expected defaults
+    const store1 = new MapStore();
+    expect(store1.buildingExtrusions3dEnabled()).toBe(false);
+    expect(store1.discoveredRegionsVisible()).toBe(true);
+    expect(store1.activeMarkerPopup()).toBeNull();
+
+    // 2. Modify settings
+    store1.setBuildingExtrusions3dEnabled(true);
+    store1.setDiscoveredRegionsVisible(false);
+    store1.openMarkerPopup({
+      title: 'Discovered Structure',
+      x: 100,
+      z: 200,
+      screenX: 300,
+      screenY: 400,
+      blockCount: 42
+    });
+
+    expect(store1.buildingExtrusions3dEnabled()).toBe(true);
+    expect(store1.discoveredRegionsVisible()).toBe(false);
+    expect(store1.activeMarkerPopup()?.title).toBe('Discovered Structure');
+    expect(store1.activeMarkerPopup()?.blockCount).toBe(42);
+
+    store1.closeMarkerPopup();
+    expect(store1.activeMarkerPopup()).toBeNull();
+
+    // 3. New MapStore instance must reload the persisted settings from storage
+    const store2 = new MapStore();
+    expect(store2.buildingExtrusions3dEnabled()).toBe(true);
+    expect(store2.discoveredRegionsVisible()).toBe(false);
+  });
+
+  it('parses real Luanti sample-luanti-world/map.sql dump with zero-OOM chunked streaming', async () => {
+    const sqlPath = 'sample-luanti-world/map.sql';
+    if (!fs.existsSync(sqlPath)) return;
+
+    const fileBuf = fs.readFileSync(sqlPath);
+    const file = new File([fileBuf], 'map.sql');
+    const reader = new PostgresSqlDumpReader(file);
+    await reader.init();
+
+    expect(reader.backendType).toBe('postgresql');
+    expect(reader.fileName).toBe('map.sql');
+
+    const overview = await reader.scanOverviewAndVerticalLayers();
+    expect(overview.backendType).toBe('postgresql');
+    expect(overview.estimatedTotalBlocks).toBe(81);
+    expect(overview.minBlockX).toBe(-4);
+    expect(overview.maxBlockX).toBe(4);
+    expect(overview.minBlockZ).toBe(-4);
+    expect(overview.maxBlockZ).toBe(4);
+    expect(overview.exploredBlockKeys.size).toBe(81); // 9x9 horizontal columns (-4..4)
+
+    // Query blocks in bounds
+    const rows = await reader.queryBlocksInBounds(
+      overview.minBlockX,
+      overview.maxBlockX,
+      overview.minBlockZ,
+      overview.maxBlockZ,
+      -1,
+      9,
+      1024,
+      1
+    );
+
+    expect(rows.length).toBe(81);
+    for (const r of rows) {
+      expect(r.data.length).toBeGreaterThan(0);
+      expect(r.x).toBeGreaterThanOrEqual(-4);
+      expect(r.x).toBeLessThanOrEqual(4);
+      expect(r.z).toBeGreaterThanOrEqual(-4);
+      expect(r.z).toBeLessThanOrEqual(4);
+    }
+
+    // Test targeted key fetching
+    const key = `0,0,0`;
+    const fetched = await reader.fetchBlocksForKeys([key]);
+    expect(fetched.length).toBe(1);
+    expect(fetched[0].x).toBe(0);
+    expect(fetched[0].y).toBe(0);
+    expect(fetched[0].z).toBe(0);
+
+    await reader.close();
+  });
+
+  it('supports databaseBackend state in MapStore and loads SQLite and PostgreSQL demo worlds', () => {
+    const store = new MapStore();
+
+    // Default demo database is sqlite3
+    store.loadDemoDatabase('sqlite3');
+    expect(store.databaseBackend()).toBe('sqlite3');
+    expect(store.worldDatabase()?.fileName).toBe('demo-world/map.sqlite');
+
+    // Switching to PostgreSQL demo database
+    store.loadDemoDatabase('postgresql');
+    expect(store.databaseBackend()).toBe('postgresql');
+    expect(store.worldDatabase()?.fileName).toBe('demo-world/map.sql');
+  });
+
+  it('exports active world as Luanti PostgreSQL dump with COPY stdin format', async () => {
+    const injector = Injector.create({
+      providers: [
+        { provide: MapStore, useFactory: () => new MapStore() },
+        { provide: CoordProjectionService, useFactory: () => new CoordProjectionService() },
+        { provide: PwaStorageService, useFactory: () => new PwaStorageService() },
+        {
+          provide: WorkerPoolService,
+          useFactory: () => runInInjectionContext(injector, () => new WorkerPoolService())
+        }
+      ]
+    });
+    const worldLoader = runInInjectionContext(injector, () => new WorldLoaderService());
+    const store = runInInjectionContext(injector, () => injector.get(MapStore));
+
+    // Load demo world into store
+    store.loadDemoDatabase('sqlite3');
+
+    // Export world as postgres dump
+    const dumpContent = await worldLoader.exportCurrentWorldAsPostgresDump();
+    expect(dumpContent).toContain('-- Luanti World Map PostgreSQL Database Dump');
+    expect(dumpContent).toContain('CREATE TABLE IF NOT EXISTS public.blocks');
+    expect(dumpContent).toContain('COPY public.blocks (pos, data) FROM stdin;');
+    expect(dumpContent).toContain('\\.');
+    // Check that at least some data lines exist with \x hex bytea
+    expect(dumpContent).toMatch(/-?\d+\t\\x[0-9a-fA-F]+/);
+  });
 });
+
+

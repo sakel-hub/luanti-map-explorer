@@ -6,6 +6,7 @@ import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { TooltipDirective } from '../../shared/directives/tooltip.directive';
 import { resolveNodeColor } from '../../core/data/node-colors';
 import { resolveBiomeForDbNode } from '../../core/data/default-biomes';
+import { copyWithSignalFeedback } from '../../core/utils/format.utils';
 import {
   LucideCheck,
   LucideCompass,
@@ -52,7 +53,7 @@ import {
                 class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-emerald-400 text-[10px] font-mono flex items-center gap-1 transition cursor-pointer">
                 @if (copiedTeleport()) {
                   <svg lucideCheck class="w-3 h-3"></svg>
-                  <span>Copied</span>
+                  <span>{{ 'common.copied' | translate }}</span>
                 } @else {
                   <svg lucideCopy class="w-3 h-3"></svg>
                   <span>/teleport</span>
@@ -143,7 +144,7 @@ import {
             <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
               <svg lucideMountain class="w-3.5 h-3.5 text-emerald-400"></svg>
               <span>
-                {{ mapStore.profileAxis() === 'x' ? 'E–W Profile (Z=' + sample.z + ')' : 'N–S Profile (X=' + sample.x + ')' }}
+                {{ mapStore.profileAxis() === 'x' ? ('inspector.profileEW' | translate) + ' (Z=' + sample.z + ')' : ('inspector.profileNS' | translate) + ' (X=' + sample.x + ')' }}
               </span>
             </span>
             <div class="flex items-center gap-1.5">
@@ -278,7 +279,7 @@ import {
           </div>
         </section>
 
-        <!-- 3. SQLite World Database Telemetry -->
+        <!-- 3. World Database Telemetry (SQLite / PostgreSQL) -->
         <section class="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2.5">
           <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
             <svg lucideDatabase class="w-3.5 h-3.5 text-purple-400"></svg>
@@ -288,13 +289,24 @@ import {
           @if (mapStore.worldDatabase(); as db) {
             <div class="space-y-2">
               <div class="p-2 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between">
-                <span class="text-slate-400">Source:</span>
+                <span class="text-slate-400 flex items-center gap-1.5">
+                  <span>{{ 'inspector.dbStatusLoaded' | translate }}</span>
+                  <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border"
+                        [class.bg-emerald-500/20]="mapStore.databaseBackend() === 'postgresql'"
+                        [class.text-emerald-300]="mapStore.databaseBackend() === 'postgresql'"
+                        [class.border-emerald-500/30]="mapStore.databaseBackend() === 'postgresql'"
+                        [class.bg-purple-500/20]="mapStore.databaseBackend() !== 'postgresql'"
+                        [class.text-purple-300]="mapStore.databaseBackend() !== 'postgresql'"
+                        [class.border-purple-500/30]="mapStore.databaseBackend() !== 'postgresql'">
+                    {{ mapStore.databaseBackend() === 'postgresql' ? 'PGSQL' : 'SQLite' }}
+                  </span>
+                </span>
                 <span class="font-mono text-purple-300 truncate max-w-[160px]">{{ db.fileName }}</span>
               </div>
 
               <div class="grid grid-cols-2 gap-2">
                 <div
-                  appTooltip="Total estimated 16×16×16 MapBlocks stored in map.sqlite"
+                  appTooltip="Total estimated 16×16×16 MapBlocks stored in world database"
                   tooltipPosition="bottom"
                   class="p-2 rounded-lg bg-slate-900 border border-slate-800">
                   <div class="text-[10px] text-slate-500">{{ 'inspector.totalBlocks' | translate }}</div>
@@ -304,7 +316,7 @@ import {
                   appTooltip="Number of high-resolution 1×1 surface node columns currently decoded in RAM"
                   tooltipPosition="bottom"
                   class="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                  <div class="text-[10px] text-slate-500">Surface Columns</div>
+                  <div class="text-[10px] text-slate-500">{{ 'inspector.surfaceColumns' | translate }}</div>
                   <div class="font-mono font-bold text-sky-400 text-sm">{{ loadedSurfaceColumnsCount() | number }}</div>
                 </div>
               </div>
@@ -314,14 +326,14 @@ import {
                   appTooltip="Tier 1/2 LRU cache of full 16×16 MapBlock surface arrays"
                   tooltipPosition="bottom"
                   class="px-2 py-1 rounded bg-slate-900/70 border border-slate-800/80 flex items-center justify-between">
-                  <span class="text-slate-400">16×16 Block Cache:</span>
+                  <span class="text-slate-400">{{ 'inspector.blockCacheLabel' | translate }}</span>
                   <span class="font-mono text-emerald-300">{{ (db.blockSurfaces?.size || 0) | number }}</span>
                 </div>
                 <div
                   appTooltip="Tier 0 global overview mipmap cells retained in RAM"
                   tooltipPosition="bottom"
                   class="px-2 py-1 rounded bg-slate-900/70 border border-slate-800/80 flex items-center justify-between">
-                  <span class="text-slate-400">Tier-0 Mipmap:</span>
+                  <span class="text-slate-400">{{ 'inspector.tier0MipmapLabel' | translate }}</span>
                   <span class="font-mono text-amber-300">{{ (db.macroMipmap?.size || 0) | number }}</span>
                 </div>
               </div>
@@ -342,13 +354,13 @@ import {
                     <span class="text-slate-400 flex-shrink-0">Y={{ sample.dbElevation }}</span>
                   </div>
                 } @else {
-                  <div class="text-slate-500 italic">Unexplored in SQLite (Showing Seed Biome)</div>
+                  <div class="text-slate-500 italic">{{ 'inspector.unexploredInSqlite' | translate }}</div>
                 }
               </div>
 
               <!-- Top Nodes Distribution in SQLite DB (Interactive + Percentage Bars) -->
               <div class="pt-1 space-y-1.5">
-                <div class="text-[10px] font-semibold uppercase text-slate-400">Top Surface Nodes in DB</div>
+                <div class="text-[10px] font-semibold uppercase text-slate-400">{{ 'inspector.topSurfaceNodesInDb' | translate }}</div>
                 @for (item of topDbNodes(); track item.name) {
                   <button
                     type="button"
@@ -488,9 +500,7 @@ export class InspectorPanelComponent {
   }
 
   public copyTeleportCommand(x: number, y: number, z: number): void {
-    navigator.clipboard?.writeText(`/teleport ${x} ${y} ${z}`);
-    this.copiedTeleport.set(true);
-    setTimeout(() => this.copiedTeleport.set(false), 1800);
+    copyWithSignalFeedback(`/teleport ${x} ${y} ${z}`, this.copiedTeleport);
   }
 
   public getChunkCoord(nodeCoord: number): number {

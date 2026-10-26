@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MapStore, VERTICAL_SLICE_PRESETS } from '../../core/state/map.store';
@@ -8,7 +8,7 @@ import { PwaStorageService } from '../../core/services/pwa-storage.service';
 import { VerticalSlicePresetId } from '../../core/models/world.model';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { TooltipDirective } from '../../shared/directives/tooltip.directive';
-import { formatDurationSeconds } from '../../core/utils/format.utils';
+import { copyWithSignalFeedback, formatDurationSeconds } from '../../core/utils/format.utils';
 import {
   LucideFolderOpen,
   LucideDatabase,
@@ -23,7 +23,10 @@ import {
   LucideX,
   LucideHardDrive,
   LucideTrash2,
-  LucideRotateCcw
+  LucideRotateCcw,
+  LucideTrees,
+  LucideEye,
+  LucideEyeOff
 } from '@lucide/angular';
 
 @Component({
@@ -50,28 +53,13 @@ import {
     LucideX,
     LucideHardDrive,
     LucideTrash2,
-    LucideRotateCcw
+    LucideRotateCcw,
+    LucideTrees,
+    LucideEye,
+    LucideEyeOff
   ],
   template: `
     <div class="h-full min-h-0 flex flex-col bg-slate-900 text-xs text-slate-200 select-none overflow-hidden">
-      <!-- Primary File Picker: accepts map.sqlite directly (+ optional map_meta.txt & world.mt). Never blocked by Chrome inside ~/Library! -->
-      <input
-        #worldFilesInput
-        type="file"
-        multiple
-        accept=".sqlite,.sqlite3,.mt,.txt"
-        (change)="onDirectoryFilesSelected($event)"
-        class="hidden" />
-
-      <!-- Secondary Folder Picker (<input webkitdirectory>) for non-system folders -->
-      <input
-        #dirInput
-        type="file"
-        webkitdirectory
-        multiple
-        (change)="onDirectoryFilesSelected($event)"
-        class="hidden" />
-
       <!-- Panel Header -->
       <div class="h-9 px-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
         <div class="flex items-center gap-2 font-semibold text-slate-200">
@@ -79,7 +67,7 @@ import {
           <span>{{ 'worldPanel.title' | translate }}</span>
         </div>
         <span class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono text-sky-400">
-          {{ workerPool.workerCount() || 1 }} Cores
+          {{ workerPool.workerCount() || 1 }} {{ 'worldPanel.coresUnit' | translate }}
         </span>
       </div>
 
@@ -105,10 +93,10 @@ import {
               class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-[10px] text-slate-300 flex items-center gap-1 transition">
               @if (copiedPath()) {
                 <svg lucideCheck class="w-3 h-3 text-emerald-400"></svg>
-                <span class="text-emerald-400 font-semibold">Copied ⌘⇧G Path</span>
+                <span class="text-emerald-400 font-semibold">{{ 'worldPanel.copiedMacPath' | translate }}</span>
               } @else {
                 <svg lucideCopy class="w-3 h-3 text-sky-400"></svg>
-                <span>Copy macOS Path</span>
+                <span>{{ 'worldPanel.copyMacPath' | translate }}</span>
               }
             </button>
           </div>
@@ -118,7 +106,7 @@ import {
               <div class="flex items-center justify-between gap-1.5">
                 <span class="font-semibold text-[11px] text-amber-300 flex items-center gap-1.5">
                   <svg lucideRotateCcw class="w-3.5 h-3.5 text-amber-400"></svg>
-                  <span>Resume Live Block Streaming</span>
+                  <span>{{ 'worldPanel.resumeLiveStream' | translate }}</span>
                 </span>
                 <span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-900/80 border border-amber-600/60 text-amber-200 font-mono">
                   1-Click
@@ -132,7 +120,7 @@ import {
                 (click)="worldLoader.openWorldFromFileHandle(resume.handle)"
                 class="w-full py-1.5 px-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] flex items-center justify-center gap-1.5 transition active:scale-[0.99] cursor-pointer">
                 <svg lucideRotateCcw class="w-3.5 h-3.5"></svg>
-                <span>Resume {{ resume.name }}</span>
+                <span>{{ resume.name }}</span>
               </button>
             </div>
           } @else if (worldLoader.isOfflineCachedWorld()) {
@@ -140,22 +128,22 @@ import {
               <div class="flex items-center justify-between gap-1.5">
                 <span class="flex items-center gap-1.5 font-bold text-xs text-sky-300">
                   <svg lucideHardDrive class="w-3.5 h-3.5 text-sky-400 flex-shrink-0"></svg>
-                  <span>Offline Cached Preview</span>
+                  <span>{{ 'worldPanel.offlineCachedPreview' | translate }}</span>
                 </span>
                 <span class="text-[9px] px-1.5 py-0.5 rounded bg-sky-900/80 border border-sky-700/70 text-sky-300 font-mono">
                   Cached
                 </span>
               </div>
               <p class="text-[10px] text-slate-300 leading-snug">
-                Overview map restored from browser cache. Connect your local <code class="text-sky-300 bg-sky-900/60 px-1 py-0.5 rounded">map.sqlite</code> to stream high-resolution 3D blocks and cave slices.
+                Overview map restored from browser cache. Connect your local <code class="text-sky-300 bg-sky-900/60 px-1 py-0.5 rounded">map.sqlite</code> or <code class="text-sky-300 bg-sky-900/60 px-1 py-0.5 rounded">map.sql</code> to stream high-resolution 3D blocks and cave slices.
               </p>
               <button
                 type="button"
                 (click)="onOpenWorldClicked()"
-                [appTooltip]="'Attach your local map.sqlite file to stream high-resolution 3D blocks, inspect nodes, and explore underground cave layers'"
+                [appTooltip]="'Attach your local map.sqlite or map.sql file to stream high-resolution 3D blocks, inspect nodes, and explore underground cave layers'"
                 class="w-full py-1.5 px-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-[11px] flex items-center justify-center gap-1.5 transition active:scale-[0.99] cursor-pointer">
                 <svg lucideDatabase class="w-3.5 h-3.5"></svg>
-                <span>Attach map.sqlite for Full 3D Streaming</span>
+                <span>{{ 'worldPanel.openFileSqliteBtn' | translate }}</span>
               </button>
             </div>
           } @else if (pwaStorage.recentWorld(); as recent) {
@@ -209,7 +197,7 @@ import {
                     [appTooltip]="'Skip remaining sector scans and explore already-decoded map sectors immediately'"
                     class="px-1.5 py-0.5 rounded bg-slate-900/90 hover:bg-rose-950/80 border border-slate-700 hover:border-rose-700 text-[9px] font-semibold text-slate-300 hover:text-rose-300 flex items-center gap-0.5 transition">
                     <svg lucideX class="w-2.5 h-2.5"></svg>
-                    <span>Stop</span>
+                    <span>{{ 'common.stop' | translate }}</span>
                   </button>
                 </div>
               </div>
@@ -253,14 +241,15 @@ import {
             </div>
           }
 
-          <!-- Primary Action: Direct map.sqlite (+ optional map_meta.txt / world.mt) File Picker -->
+          <!-- Primary Action: Direct Database (+ optional map_meta.txt / world.mt) File Picker -->
           <button
             type="button"
             (click)="onOpenWorldClicked()"
-            [appTooltip]="'Inside your world folder (e.g. SaKeL_Survival), click map.sqlite (and ⌘-click map_meta.txt & world.mt) to enable Open'"
+            [appTooltip]="'worldPanel.openFileSqliteBtn' | translate"
+            [appTooltipShortcutId]="'open_world'"
             class="w-full py-2 px-3 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-semibold flex items-center justify-center gap-2 transition active:scale-[0.99] cursor-pointer">
             <svg lucideUpload class="w-4 h-4 text-emerald-400"></svg>
-            <span>Open map.sqlite / World Files</span>
+            <span>{{ 'worldPanel.openFileSqliteBtn' | translate }}</span>
           </button>
 
           <!-- Drag & Drop & File Selection Hint Box -->
@@ -268,35 +257,71 @@ import {
             (click)="onOpenWorldClicked()"
             class="p-2 rounded-lg border border-dashed border-slate-700/80 hover:border-sky-500/60 bg-slate-900/50 text-center cursor-pointer transition space-y-0.5">
             <div class="text-[10px] text-slate-300 font-medium">
-              Drag &amp; Drop <code class="text-emerald-400 font-mono">map.sqlite</code> or a World Folder here
+              {{ 'worldPanel.dropzoneHint' | translate }}
             </div>
             <div class="text-[9px] text-slate-400 leading-tight">
-              In Finder dialog: open your world folder, then click <code class="text-sky-300 font-mono">map.sqlite</code> (+ <code class="text-sky-300 font-mono">⌘</code>-click <code class="text-sky-300 font-mono">map_meta.txt</code> &amp; <code class="text-sky-300 font-mono">world.mt</code>)
+              <code class="text-sky-300 font-mono">map.sqlite</code> · <code class="text-sky-300 font-mono">map.sql</code> · <code class="text-sky-300 font-mono">world.mt</code>
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-1.5">
             <button
               type="button"
-              (click)="dirInput.click()"
-              [appTooltip]="'Select a non-system world folder (e.g. sample-luanti-world)'"
+              (click)="onOpenDirectoryClicked()"
+              [appTooltip]="'worldPanel.openDirectoryBtn' | translate"
               class="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-slate-300 font-medium flex items-center justify-center gap-1.5 text-[11px] transition">
               <svg lucideFolderOpen class="w-3.5 h-3.5 text-sky-400"></svg>
-              <span class="truncate">Open Folder</span>
+              <span class="truncate">{{ 'worldPanel.openFolderShort' | translate }}</span>
             </button>
 
             <button
               type="button"
-              (click)="mapStore.loadDemoDatabase()"
-              [appTooltip]="'Load built-in demo world with Spawn Citadel, Sky Islands & Caves'"
+              (click)="worldLoader.loadDemoWorld('sqlite3')"
+              [appTooltip]="'worldPanel.loadSampleDbBtn' | translate"
               class="py-1.5 px-2 rounded-lg bg-purple-950/30 hover:bg-purple-900/40 border border-purple-800/50 text-purple-300 font-medium flex items-center justify-center gap-1.5 text-[11px] transition">
               <svg lucideDatabase class="w-3.5 h-3.5 text-purple-400"></svg>
-              <span class="truncate">Demo DB</span>
+              <span class="truncate">Demo (SQLite)</span>
             </button>
           </div>
 
+          <div class="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              (click)="worldLoader.loadDemoWorld('postgresql')"
+              [appTooltip]="'worldPanel.loadSamplePgBtn' | translate"
+              class="py-1.5 px-2 rounded-lg bg-emerald-950/30 hover:bg-emerald-900/40 border border-emerald-800/50 text-emerald-300 font-medium flex items-center justify-center gap-1.5 text-[11px] transition">
+              <svg lucideDatabase class="w-3.5 h-3.5 text-emerald-400"></svg>
+              <span class="truncate">Demo (PGSQL)</span>
+            </button>
+
+            @if (mapStore.worldDatabase()) {
+              <button
+                type="button"
+                (click)="worldLoader.exportCurrentWorldAsPostgresDump()"
+                [appTooltip]="'worldPanel.exportPostgresBtn' | translate"
+                class="py-1.5 px-2 rounded-lg bg-amber-950/30 hover:bg-amber-900/40 border border-amber-800/50 text-amber-300 font-medium flex items-center justify-center gap-1.5 text-[11px] transition">
+                <svg lucideUpload class="w-3.5 h-3.5 text-amber-400 rotate-180"></svg>
+                <span class="truncate">Export .sql</span>
+              </button>
+            }
+          </div>
+
           <div class="pt-1 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/60">
-            <span class="truncate">{{ mapStore.worldConfig().worldName }}</span>
+            <div class="flex items-center gap-1.5 truncate">
+              <span class="truncate">{{ mapStore.worldConfig().worldName }}</span>
+              @if (mapStore.databaseBackend()) {
+                <span
+                  class="font-mono px-1 py-0.2 rounded text-[9px] font-bold border"
+                  [class.bg-emerald-950]="mapStore.databaseBackend() === 'postgresql'"
+                  [class.text-emerald-400]="mapStore.databaseBackend() === 'postgresql'"
+                  [class.border-emerald-700]="mapStore.databaseBackend() === 'postgresql'"
+                  [class.bg-cyan-950]="mapStore.databaseBackend() === 'sqlite3'"
+                  [class.text-cyan-400]="mapStore.databaseBackend() === 'sqlite3'"
+                  [class.border-cyan-700]="mapStore.databaseBackend() === 'sqlite3'">
+                  {{ mapStore.databaseBackend() === 'postgresql' ? 'PGSQL' : 'SQLite' }}
+                </span>
+              }
+            </div>
             <span class="font-mono text-emerald-400 font-semibold">~{{ mapStore.worldConfig().blockCount | number }} blocks</span>
           </div>
 
@@ -305,16 +330,33 @@ import {
             @if (regions.length > 0) {
               <div class="pt-2 border-t border-slate-800/80 space-y-1.5">
                 <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
-                    Discovered Regions &amp; Bases ({{ regions.length }})
-                  </span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                      {{ 'worldPanel.discoveredRegions' | translate }} ({{ regions.length }})
+                    </span>
+                    <button
+                      type="button"
+                      (click)="mapStore.toggleDiscoveredRegionsVisible()"
+                      [appTooltip]="mapStore.discoveredRegionsVisible() ? 'Hide structure pins on map' : 'Show structure pins on map'"
+                      tooltipPosition="top"
+                      [class.text-sky-400]="mapStore.discoveredRegionsVisible()"
+                      [class.text-slate-500]="!mapStore.discoveredRegionsVisible()"
+                      class="p-0.5 rounded hover:bg-slate-800 transition">
+                      @if (mapStore.discoveredRegionsVisible()) {
+                        <svg lucideEye class="w-3 h-3"></svg>
+                      } @else {
+                        <svg lucideEyeOff class="w-3 h-3"></svg>
+                      }
+                    </button>
+                  </div>
                   <button
                     type="button"
                     (click)="mapStore.fitWorldBounds()"
-                    appTooltip="Zoom out to fit the full bounding box of the loaded SQLite world (Shortcut: F)"
+                    [appTooltip]="'worldPanel.fitWholeWorld' | translate"
+                    [appTooltipShortcutId]="'view_fit_world'"
                     tooltipPosition="left"
                     class="px-1.5 py-0.5 rounded bg-sky-950/70 hover:bg-sky-900 border border-sky-700/60 text-[10px] text-sky-300 font-semibold transition cursor-pointer">
-                    Fit Whole World
+                    {{ 'worldPanel.fitWholeWorld' | translate }}
                   </button>
                 </div>
 
@@ -345,7 +387,7 @@ import {
           <div class="flex items-center justify-between">
             <span class="text-[11px] font-semibold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
               <svg lucideLayers class="w-3.5 h-3.5 text-sky-400"></svg>
-              <span>Elevation / Depth Slicer (Y)</span>
+              <span>{{ 'worldPanel.elevationSlicerTitle' | translate }}</span>
             </span>
             <span class="px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-800/70 font-mono text-[10px] text-sky-300">
               Y: {{ mapStore.verticalSlice().minY }}..{{ mapStore.verticalSlice().maxY }}
@@ -379,7 +421,7 @@ import {
                   </div>
                 </div>
                 <span class="font-mono text-[10px] text-sky-400 flex-shrink-0">
-                  @if (layer.estimatedBlocks > 0) {
+                  @if ((layer.estimatedBlocks ?? 0) > 0) {
                     ~{{ layer.estimatedBlocks | number }} blk
                   } @else {
                     Slice
@@ -393,7 +435,7 @@ import {
           <div class="pt-1.5 border-t border-slate-800/80 space-y-2">
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="text-[10px] text-slate-400 block mb-1">Min Y (Depth Floor)</label>
+                <label class="text-[10px] text-slate-400 block mb-1">{{ 'worldPanel.minYFloor' | translate }}</label>
                 <input
                   type="number"
                   [ngModel]="mapStore.verticalSlice().minY"
@@ -405,7 +447,7 @@ import {
                   class="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2 py-1 text-sky-300 font-mono text-xs focus:outline-none focus:border-sky-500" />
               </div>
               <div>
-                <label class="text-[10px] text-slate-400 block mb-1">Max Y (Ceiling)</label>
+                <label class="text-[10px] text-slate-400 block mb-1">{{ 'worldPanel.maxYCeiling' | translate }}</label>
                 <input
                   type="number"
                   [ngModel]="mapStore.verticalSlice().maxY"
@@ -421,7 +463,7 @@ import {
             <!-- Cave X-Ray Mode Toggle -->
             <label class="flex items-center justify-between p-2 rounded-lg bg-slate-900/90 hover:bg-slate-900 border border-slate-800 cursor-pointer transition">
               <div class="pr-2">
-                <div class="font-semibold text-amber-300 text-[11px]">Cave X-Ray Mode</div>
+                <div class="font-semibold text-amber-300 text-[11px]">{{ 'worldPanel.caveXrayMode' | translate }}</div>
                 <div class="text-[9px] text-slate-400">Hide solid stone ceiling to reveal underground caves &amp; lava</div>
               </div>
               <input
@@ -457,7 +499,7 @@ import {
               [class.text-white]="mapStore.viewMode() === 'hybrid'"
               [class.text-slate-400]="mapStore.viewMode() !== 'hybrid'"
               class="py-1.5 px-1.5 rounded text-[11px] font-semibold transition text-center truncate">
-              Hybrid
+              {{ 'header.modeHybridShort' | translate }}
             </button>
             <button
               type="button"
@@ -466,7 +508,7 @@ import {
               [class.text-white]="mapStore.viewMode() === 'db'"
               [class.text-slate-400]="mapStore.viewMode() !== 'db'"
               class="py-1.5 px-1.5 rounded text-[11px] font-semibold transition text-center truncate">
-              SQLite DB
+              {{ 'header.modeDbShort' | translate }}
             </button>
           </div>
         </section>
@@ -574,14 +616,41 @@ import {
                   [ngModel]="mapStore.terrainExaggeration()"
                   (ngModelChange)="mapStore.setTerrainExaggeration(+$event)"
                   class="w-full accent-sky-500 cursor-pointer" />
+
+                <label
+                  appTooltip="Extrude player buildings and structures into true 3D geometry with vertical walls"
+                  tooltipPosition="right"
+                  class="flex items-center justify-between pt-1 cursor-pointer">
+                  <span class="text-[11px] text-slate-300">{{ 'worldPanel.buildingExtrusions' | translate }}</span>
+                  <input
+                    type="checkbox"
+                    [checked]="mapStore.buildingExtrusions3dEnabled()"
+                    (change)="mapStore.setBuildingExtrusions3dEnabled(!mapStore.buildingExtrusions3dEnabled())"
+                    class="w-3.5 h-3.5 accent-emerald-500 rounded cursor-pointer" />
+                </label>
               </div>
             }
+
+            <label
+              appTooltip="Render authentic 2.5D billboard tree & flora sapling sprites on the terrain (Shortcut: T)"
+              tooltipPosition="right"
+              class="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 hover:bg-slate-900 border border-slate-800/80 cursor-pointer transition">
+              <span class="font-medium text-slate-200 flex items-center gap-1.5">
+                <svg lucideTrees class="w-3.5 h-3.5 text-emerald-400"></svg>
+                <span>{{ 'worldPanel.treeSprites' | translate }}</span>
+              </span>
+              <input
+                type="checkbox"
+                [checked]="mapStore.treeSpritesEnabled()"
+                (change)="mapStore.toggleTreeSprites()"
+                class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+            </label>
 
             <label
               appTooltip="Color terrain using a topographic elevation color ramp instead of biome colors"
               tooltipPosition="right"
               class="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 hover:bg-slate-900 border border-slate-800/80 cursor-pointer transition">
-              <span class="font-medium text-slate-200">Hypsometric Elevation Colors</span>
+              <span class="font-medium text-slate-200">{{ 'worldPanel.hypsometricColors' | translate }}</span>
               <input
                 type="checkbox"
                 [checked]="mapStore.hypsometricMode()"
@@ -689,7 +758,7 @@ import {
             @if (pwaStorage.isPersisted()) {
               <span class="px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-700/60 text-[9px] font-mono text-emerald-300 flex items-center gap-1">
                 <svg lucideCheck class="w-2.5 h-2.5"></svg>
-                <span>Persisted</span>
+                <span>{{ 'worldPanel.persistedBadge' | translate }}</span>
               </span>
             } @else {
               <button
@@ -721,7 +790,7 @@ import {
 
             <div class="flex items-center justify-between pt-1 text-[10px]">
               <span class="text-slate-400 truncate">
-                {{ quota?.tileCacheCount ?? 0 }} tiles cached (<2ms L2 recall)
+                {{ quota?.tileCacheCount ?? 0 }} {{ 'worldPanel.tilesCachedSuffix' | translate }}
               </span>
               <button
                 type="button"
@@ -744,9 +813,6 @@ import {
   `
 })
 export class WorldPanelComponent {
-  @ViewChild('worldFilesInput') worldFilesInputRef?: ElementRef<HTMLInputElement>;
-  @ViewChild('dirInput') dirInputRef?: ElementRef<HTMLInputElement>;
-
   public readonly mapStore = inject(MapStore);
   public readonly worldLoader = inject(WorldLoaderService);
   public readonly workerPool = inject(WorkerPoolService);
@@ -759,11 +825,11 @@ export class WorldPanelComponent {
   public readonly formatDuration = formatDurationSeconds;
 
   public async onOpenWorldClicked(): Promise<void> {
-    if (this.pwaStorage.hasFileSystemAccess) {
-      await this.worldLoader.pickWorldFileViaFileSystemApi();
-    } else {
-      this.worldFilesInputRef?.nativeElement?.click();
-    }
+    await this.worldLoader.openFilePicker();
+  }
+
+  public async onOpenDirectoryClicked(): Promise<void> {
+    await this.worldLoader.openFilePicker({ directory: true });
   }
 
   public async clearTileCache(): Promise<void> {
@@ -821,14 +887,6 @@ export class WorldPanelComponent {
     await this.worldLoader.reloadActiveVerticalSlice();
   }
 
-  public async onDirectoryFilesSelected(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      await this.worldLoader.handleFileListInput(input.files);
-      input.value = '';
-    }
-  }
-
   public onDragOver(event: DragEvent): void {
     event.preventDefault();
     event.stopPropagation();
@@ -849,10 +907,6 @@ export class WorldPanelComponent {
   }
 
   public copyMacWorldsPath(): void {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText('~/Library/Application Support/minetest/worlds');
-      this.copiedPath.set(true);
-      setTimeout(() => this.copiedPath.set(false), 2500);
-    }
+    copyWithSignalFeedback('~/Library/Application Support/minetest/worlds', this.copiedPath, 2500);
   }
 }

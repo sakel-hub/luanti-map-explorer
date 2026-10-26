@@ -101,9 +101,30 @@ export class App {
       effect(() => {
         const cfg = this.mapStore.worldConfig();
         const mode = this.mapStore.viewMode();
+        const appTitle = this.translation.t('header.title');
+        const metaDesc = this.translation.t('app.metaDescription');
         if (typeof document !== 'undefined') {
           const worldPrefix = cfg.worldName ? `${cfg.worldName} • ` : '';
-          document.title = `Luanti Map Explorer — ${worldPrefix}Seed ${cfg.seed} (${cfg.mapgen.toUpperCase()} • ${mode.toUpperCase()})`;
+          document.title = `${appTitle} — ${worldPrefix}Seed ${cfg.seed} (${cfg.mapgen.toUpperCase()} • ${mode.toUpperCase()})`;
+          const descMeta = document.querySelector('meta[name="description"]');
+          if (descMeta) {
+            descMeta.setAttribute('content', metaDesc);
+          }
+        }
+      });
+
+      effect(() => {
+        const action = this.keyboardShortcuts.lastTriggeredAction();
+        if (!action) return;
+        if (action.id === 'open_world') {
+          this.worldLoader.openFilePicker();
+        } else if (action.id === 'open_routes') {
+          this.activeRightTab.set('routes');
+          if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+            this.mobileSheetTab.set('routes');
+          }
+        } else if (action.id === 'open_share') {
+          this.showShareModal.set(true);
         }
       });
     } catch {
@@ -171,104 +192,86 @@ export class App {
     window.dispatchEvent(new Event('resize'));
   }
 
-  // --- Left Splitter Resize (Horizontal) ---
+  public resetPanelSize(side: 'left' | 'right'): void {
+    if (side === 'left') {
+      this.leftWidth.set(300);
+      safeSetItem('luanti_map_panel_left', '300');
+    } else {
+      this.rightWidth.set(350);
+      safeSetItem('luanti_map_panel_right', '350');
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('resize'));
+    }
+  }
+
+  private startPanelResize(
+    side: 'left' | 'right',
+    startX: number,
+    mode: 'mouse' | 'touch'
+  ): void {
+    this.activeDrag.set(side);
+    const widthSignal = side === 'left' ? this.leftWidth : this.rightWidth;
+    const minW = side === 'left' ? 220 : 260;
+    const maxFraction = side === 'left' ? 0.42 : 0.45;
+    const storageKey = `luanti_map_panel_${side}`;
+    const startWidth = widthSignal();
+
+    const applyClientX = (clientX: number) => {
+      const deltaX = side === 'left' ? clientX - startX : startX - clientX;
+      const newWidth = Math.max(minW, Math.min(window.innerWidth * maxFraction, startWidth + deltaX));
+      widthSignal.set(newWidth);
+    };
+
+    if (mode === 'mouse') {
+      const onMouseMove = (e: MouseEvent) => applyClientX(e.clientX);
+      const onMouseUp = () => {
+        this.activeDrag.set(null);
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        window.dispatchEvent(new Event('resize'));
+        safeSetItem(storageKey, widthSignal().toString());
+      };
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    } else {
+      const onTouchMove = (e: TouchEvent) => {
+        if (e.touches.length === 1) {
+          applyClientX(e.touches[0].clientX);
+        }
+      };
+      const onTouchEnd = () => {
+        this.activeDrag.set(null);
+        window.removeEventListener('touchmove', onTouchMove);
+        window.removeEventListener('touchend', onTouchEnd);
+        window.dispatchEvent(new Event('resize'));
+        safeSetItem(storageKey, widthSignal().toString());
+      };
+      window.addEventListener('touchmove', onTouchMove);
+      window.addEventListener('touchend', onTouchEnd);
+    }
+  }
+
   public startLeftResize(event: MouseEvent): void {
     event.preventDefault();
-    this.activeDrag.set('left');
-    const startX = event.clientX;
-    const startWidth = this.leftWidth();
-
-    const onMouseMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - startX;
-      const newWidth = Math.max(220, Math.min(window.innerWidth * 0.42, startWidth + deltaX));
-      this.leftWidth.set(newWidth);
-    };
-
-    const onMouseUp = () => {
-      this.activeDrag.set(null);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      window.dispatchEvent(new Event('resize'));
-      safeSetItem('luanti_map_panel_left', this.leftWidth().toString());
-    };
-
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    this.startPanelResize('left', event.clientX, 'mouse');
   }
 
   public startLeftResizeTouch(event: TouchEvent): void {
-    if (event.touches.length !== 1) return;
-    this.activeDrag.set('left');
-    const startX = event.touches[0].clientX;
-    const startWidth = this.leftWidth();
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      const deltaX = e.touches[0].clientX - startX;
-      const newWidth = Math.max(220, Math.min(window.innerWidth * 0.42, startWidth + deltaX));
-      this.leftWidth.set(newWidth);
-    };
-
-    const onTouchEnd = () => {
-      this.activeDrag.set(null);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onTouchEnd);
-      window.dispatchEvent(new Event('resize'));
-      safeSetItem('luanti_map_panel_left', this.leftWidth().toString());
-    };
-
-    window.addEventListener('touchmove', onTouchMove);
-    window.addEventListener('touchend', onTouchEnd);
+    if (event.touches.length === 1) {
+      this.startPanelResize('left', event.touches[0].clientX, 'touch');
+    }
   }
 
-  // --- Right Splitter Resize (Horizontal) ---
   public startRightResize(event: MouseEvent): void {
     event.preventDefault();
-    this.activeDrag.set('right');
-    const startX = event.clientX;
-    const startWidth = this.rightWidth();
-
-    const onMouseMove = (e: MouseEvent) => {
-      const deltaX = startX - e.clientX;
-      const newWidth = Math.max(260, Math.min(window.innerWidth * 0.45, startWidth + deltaX));
-      this.rightWidth.set(newWidth);
-    };
-
-    const onMouseUp = () => {
-      this.activeDrag.set(null);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      window.dispatchEvent(new Event('resize'));
-      safeSetItem('luanti_map_panel_right', this.rightWidth().toString());
-    };
-
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    this.startPanelResize('right', event.clientX, 'mouse');
   }
 
   public startRightResizeTouch(event: TouchEvent): void {
-    if (event.touches.length !== 1) return;
-    this.activeDrag.set('right');
-    const startX = event.touches[0].clientX;
-    const startWidth = this.rightWidth();
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      const deltaX = startX - e.touches[0].clientX;
-      const newWidth = Math.max(260, Math.min(window.innerWidth * 0.45, startWidth + deltaX));
-      this.rightWidth.set(newWidth);
-    };
-
-    const onTouchEnd = () => {
-      this.activeDrag.set(null);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onTouchEnd);
-      window.dispatchEvent(new Event('resize'));
-      safeSetItem('luanti_map_panel_right', this.rightWidth().toString());
-    };
-
-    window.addEventListener('touchmove', onTouchMove);
-    window.addEventListener('touchend', onTouchEnd);
+    if (event.touches.length === 1) {
+      this.startPanelResize('right', event.touches[0].clientX, 'touch');
+    }
   }
 
   @HostListener('window:keydown', ['$event'])

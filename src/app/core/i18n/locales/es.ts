@@ -5,6 +5,7 @@ export const es: TranslationDictionary = {
   ...en,
   common: {
     ...en.common,
+    cancel: 'Cancelar',
     close: 'Cerrar',
     save: 'Guardar',
     reset: 'Restablecer',
@@ -13,41 +14,117 @@ export const es: TranslationDictionary = {
     download: 'Descargar',
     loading: 'Cargando...',
     search: 'Buscar...',
-    clear: 'Limpiar'
+    clear: 'Limpiar',
+    stop: 'Detener',
+    edit: 'Editar',
+    delete: 'Eliminar'
+  },
+  app: {
+    ...en.app,
+    mapView: 'Vista del Mapa',
+    worldAndSeed: 'Mundo y Semilla',
+    dropWorldTitle: 'Suelta aquí tu mundo Luanti o map.sqlite'
   },
   header: {
     ...en.header,
     title: 'Explorador de Mapas Luanti',
     openWorldFolder: 'Abrir carpeta del mundo',
+    openSqliteOrFiles: 'Abrir map.sqlite / Archivos',
     loadDemoWorld: 'Mundo Demo DB',
     randomSeed: 'Semilla aleatoria',
     shortcuts: 'Atajos',
     help: 'Guía rápida',
-    share: 'Compartir'
+    share: 'Compartir',
+    modeSeedShort: 'Semilla',
+    modeHybridShort: 'Híbrido',
+    modeDbShort: 'DB Mundo',
+    languageSection: 'Idioma',
+    docsAndSharingSection: 'Documentación y Compartir',
+    preferencesSection: 'Preferencias',
+    offlineBadge: 'Modo sin conexión',
+    updateAvailable: 'Actualización lista — Recargar'
   },
   worldPanel: {
     ...en.worldPanel,
     title: 'Controles de Mundo y Semilla',
+    worldSource: 'Carpeta de mundo Luanti / DB',
     openDirectoryBtn: 'Abrir carpeta de mundo Luanti',
-    openFileSqliteBtn: 'Cargar archivo map.sqlite',
-    loadSampleDbBtn: 'Cargar mundo demo integrado',
+    openFileSqliteBtn: 'Abrir DB del mundo (SQLite / PostgreSQL)',
+    loadSampleDbBtn: 'Cargar mundo demo (SQLite)',
+    loadSamplePgBtn: 'Cargar mundo demo (PostgreSQL)',
+    exportPostgresBtn: 'Exportar volcado PostgreSQL (.sql)',
+    backendBadge: 'Backend de base de datos',
+    backendSqlite: 'SQLite B-Tree',
+    backendPostgresql: 'Volcado PostgreSQL',
     modeSeed: 'Biomas de Semilla',
-    modeDb: 'Solo SQLite DB',
-    modeHybrid: 'Híbrido (Semilla + DB)'
+    modeDb: 'Solo DB del mundo',
+    modeHybrid: 'Híbrido (Semilla + DB)',
+    coresUnit: 'Núcleos',
+    fitWholeWorld: 'Ajustar a todo el mundo',
+    elevationSlicerTitle: 'Corte de elevación / profundidad (Y)',
+    caveXrayMode: 'Modo Rayos X de cuevas',
+    buildingExtrusions: 'Extrusiones 3D de estructuras (DB)',
+    hypsometricColors: 'Colores hipsométricos',
+    persistedBadge: 'Persistente',
+    tilesCachedSuffix: 'teselas en caché'
   },
   voronoi: {
     ...en.voronoi,
     title: 'Matriz de Voronoi',
-    subtitle: 'Diagrama 2D Calor (X) vs. Humedad (Y)'
+    subtitle: 'Diagrama 2D Calor (X) vs. Humedad (Y)',
+    biomePaletteLabel: 'Paleta de Biomas / Mods',
+    customBiomeBtn: 'Bioma propio',
+    addCustomBiomeTitle: 'Añadir bioma Voronoi personalizado',
+    addBiomeSubmit: 'Añadir bioma'
   },
   inspector: {
     ...en.inspector,
-    title: 'Inspector y DB'
+    title: 'Inspector y DB',
+    profileEW: 'Perfil E–O',
+    profileNS: 'Perfil N–S',
+    surfaceColumns: 'Columnas de superficie'
+  },
+  markers: {
+    ...en.markers,
+    title: 'Marcadores',
+    savedWaypoints: 'Puntos guardados',
+    clearAllBtn: 'Borrar todo'
+  },
+  viewport: {
+    ...en.viewport,
+    relief3dOn: 'Relieve 3D ACTIVO',
+    flat2d: '2D Plano',
+    elevColors: 'Colores Alt.',
+    biomeColors: 'Colores Bioma',
+    ySliceLabel: 'Corte Y:',
+    sliceSky: 'Islas del cielo',
+    sliceSurface: 'Superficie',
+    sliceCaves: 'Cuevas',
+    sliceDeep: 'Cavernas prof.',
+    sliceAbyss: 'Abismo',
+    tiltLabel: 'Inclinación:',
+    orbitLabel: 'Órbita:',
+    scale3dLabel: 'Escala 3D:',
+    models3dLabel: 'Modelos 3D:',
+    baking3dTiles: 'Procesando teselas 3D'
+  },
+  shortcuts: {
+    ...en.shortcuts,
+    title: 'Atajos de teclado',
+    catMapCamera: 'Mapa y Cámara',
+    catModesLayers: 'Modos y Capas',
+    catWorldSeed: 'Mundo y Semilla',
+    catGeneral: 'General'
   },
   share: {
     ...en.share,
     title: 'Compartir mapa y semilla de Luanti',
     copyLink: 'Copiar enlace',
     linkCopied: '¡Copiado!'
+  },
+  routes: {
+    ...en.routes,
+    title: 'Planificador de rutas',
+    trySampleRoute: 'Probar ruta de ejemplo'
   }
 };

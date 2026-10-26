@@ -135,7 +135,43 @@ async function main() {
   fs.writeFileSync(path.join(outDir, 'map.sqlite'), Buffer.from(binarySqlite));
   db.close();
 
-  console.log(`Generated sample Luanti world in ${outDir} (${count} MapBlocks in map.sqlite)`);
+  // 4. Generate map.sql (PostgreSQL dump format)
+  const sqlLines = [
+    '--',
+    '-- PostgreSQL database dump for Luanti / Minetest world',
+    '-- Schema: public.blocks (pos bigint PRIMARY KEY, data bytea)',
+    '--',
+    'SET statement_timeout = 0;',
+    'SET client_encoding = \'UTF8\';',
+    'SET standard_conforming_strings = on;',
+    '',
+    'CREATE TABLE IF NOT EXISTS public.blocks (',
+    '    pos bigint NOT NULL,',
+    '    data bytea',
+    ');',
+    '',
+    'ALTER TABLE ONLY public.blocks',
+    '    DROP CONSTRAINT IF EXISTS blocks_pkey;',
+    'ALTER TABLE ONLY public.blocks',
+    '    ADD CONSTRAINT blocks_pkey PRIMARY KEY (pos);',
+    '',
+    'COPY public.blocks (pos, data) FROM stdin;'
+  ];
+
+  for (let bz = -4; bz <= 4; bz++) {
+    for (let bx = -4; bx <= 4; bx++) {
+      const pos = packBlockPos(bx, 0, bz);
+      const blob = createV28MapBlockBlob(bx, bz);
+      const hex = blob.toString('hex');
+      sqlLines.push(`${pos}\t\\\\x${hex}`);
+    }
+  }
+
+  sqlLines.push('\\.');
+  sqlLines.push('');
+  fs.writeFileSync(path.join(outDir, 'map.sql'), sqlLines.join('\n'), 'utf8');
+
+  console.log(`Generated sample Luanti world in ${outDir} (${count} MapBlocks in map.sqlite & map.sql)`);
 }
 
 main().catch(err => {

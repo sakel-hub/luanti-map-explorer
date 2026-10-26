@@ -8,12 +8,12 @@ export interface LocaleMeta {
 }
 
 export const SUPPORTED_LOCALES: LocaleMeta[] = [
-  { id: 'en', name: 'English', nativeName: 'English', flag: '🇬🇧' },
-  { id: 'sk', name: 'Slovak', nativeName: 'Slovenčina', flag: '🇸🇰' },
-  { id: 'de', name: 'German', nativeName: 'Deutsch', flag: '🇩🇪' },
-  { id: 'fr', name: 'French', nativeName: 'Français', flag: '🇫🇷' },
-  { id: 'es', name: 'Spanish', nativeName: 'Español', flag: '🇪🇸' },
-  { id: 'ru', name: 'Russian', nativeName: 'Русский', flag: '🇷🇺' }
+  { id: 'en', name: 'English', nativeName: 'English', flag: 'EN' },
+  { id: 'sk', name: 'Slovak', nativeName: 'Slovenčina', flag: 'SK' },
+  { id: 'de', name: 'German', nativeName: 'Deutsch', flag: 'DE' },
+  { id: 'fr', name: 'French', nativeName: 'Français', flag: 'FR' },
+  { id: 'es', name: 'Spanish', nativeName: 'Español', flag: 'ES' },
+  { id: 'ru', name: 'Russian', nativeName: 'Русский', flag: 'RU' }
 ];
 
 export interface TranslationDictionary {
@@ -29,6 +29,18 @@ export interface TranslationDictionary {
     loading: string;
     search: string;
     clear: string;
+    stop: string;
+    edit: string;
+    delete: string;
+  };
+  app: {
+    mapView: string;
+    worldAndSeed: string;
+    dropWorldTitle: string;
+    dropWorldSubtitle: string;
+    resizeLeftSplitter: string;
+    resizeRightSplitter: string;
+    metaDescription: string;
   };
   header: {
     title: string;
@@ -36,6 +48,7 @@ export interface TranslationDictionary {
     worldName: string;
     seedLabel: string;
     openWorldFolder: string;
+    openSqliteOrFiles: string;
     loadDemoWorld: string;
     randomSeed: string;
     shortcuts: string;
@@ -46,6 +59,14 @@ export interface TranslationDictionary {
     themeDark: string;
     themeLight: string;
     installApp: string;
+    modeSeedShort: string;
+    modeHybridShort: string;
+    modeDbShort: string;
+    languageSection: string;
+    docsAndSharingSection: string;
+    preferencesSection: string;
+    offlineBadge: string;
+    updateAvailable: string;
   };
   worldPanel: {
     title: string;
@@ -53,6 +74,11 @@ export interface TranslationDictionary {
     openDirectoryBtn: string;
     openFileSqliteBtn: string;
     loadSampleDbBtn: string;
+    loadSamplePgBtn: string;
+    exportPostgresBtn: string;
+    backendBadge: string;
+    backendSqlite: string;
+    backendPostgresql: string;
     seedSection: string;
     seedInput: string;
     randomize: string;
@@ -78,6 +104,25 @@ export interface TranslationDictionary {
     tileCacheCleared: string;
     persistentStorage: string;
     reopenRecentWorld: string;
+    coresUnit: string;
+    copyMacPath: string;
+    copiedMacPath: string;
+    resumeLiveStream: string;
+    offlineCachedPreview: string;
+    dropzoneHint: string;
+    openFolderShort: string;
+    demoDbShort: string;
+    discoveredRegions: string;
+    fitWholeWorld: string;
+    elevationSlicerTitle: string;
+    minYFloor: string;
+    maxYCeiling: string;
+    caveXrayMode: string;
+    buildingExtrusions: string;
+    treeSprites: string;
+    hypsometricColors: string;
+    persistedBadge: string;
+    tilesCachedSuffix: string;
   };
   voronoi: {
     title: string;
@@ -99,6 +144,14 @@ export interface TranslationDictionary {
     isolatedBiome: string;
     clearFilter: string;
     clickToIsolateHint: string;
+    biomePaletteLabel: string;
+    heatPointLabel: string;
+    humidityPointLabel: string;
+    nextClosestLabel: string;
+    biomeSeedsList: string;
+    customBiomeBtn: string;
+    addCustomBiomeTitle: string;
+    addBiomeSubmit: string;
   };
   inspector: {
     title: string;
@@ -120,6 +173,13 @@ export interface TranslationDictionary {
     exploredNode: string;
     jumpToOrigin: string;
     jumpToCoord: string;
+    profileEW: string;
+    profileNS: string;
+    surfaceColumns: string;
+    blockCacheLabel: string;
+    tier0MipmapLabel: string;
+    unexploredInSqlite: string;
+    topSurfaceNodesInDb: string;
   };
   markers: {
     title: string;
@@ -130,6 +190,18 @@ export interface TranslationDictionary {
     importJson: string;
     copyWaypoints: string;
     emptyState: string;
+    customToggle: string;
+    editMarkerTitle: string;
+    newMarkerTitle: string;
+    useCursorBtn: string;
+    savedWaypoints: string;
+    clearAllBtn: string;
+    portabilitySection: string;
+    catBase: string;
+    catPortal: string;
+    catDungeon: string;
+    catResource: string;
+    catPoi: string;
   };
   viewport: {
     resetNorth: string;
@@ -139,10 +211,45 @@ export interface TranslationDictionary {
     zoomOut: string;
     centerOrigin: string;
     exportPng: string;
+    relief3dOn: string;
+    flat2d: string;
+    elevColors: string;
+    biomeColors: string;
+    treesOn: string;
+    treesOff: string;
+    ySliceLabel: string;
+    sliceSky: string;
+    sliceSurface: string;
+    sliceCaves: string;
+    sliceDeep: string;
+    sliceAbyss: string;
+    tiltLabel: string;
+    orbitLabel: string;
+    scale3dLabel: string;
+    models3dLabel: string;
+    modelsOff: string;
+    modelsStructures: string;
+    modelsAll: string;
+    lodWorld: string;
+    lodRegion: string;
+    lodSector: string;
+    lodDetail: string;
+    baking3dTiles: string;
+    posLabel: string;
+    blockLabel: string;
+    zoomLabel: string;
+    heatShort: string;
+    humShort: string;
+    dbShort: string;
+    copyCoordsTooltip: string;
   };
   shortcuts: {
     title: string;
     subtitle: string;
+    catMapCamera: string;
+    catModesLayers: string;
+    catWorldSeed: string;
+    catGeneral: string;
   };
   help: {
     title: string;
@@ -209,6 +316,13 @@ export interface TranslationDictionary {
     calculating: string;
     setAsStart: string;
     setAsDest: string;
+    spawnBtn: string;
+    cursorBtn: string;
+    clickMapBtn: string;
+    depthShallow: string;
+    depthDeepOre: string;
+    depthAbyss: string;
+    trySampleRoute: string;
   };
 }
 

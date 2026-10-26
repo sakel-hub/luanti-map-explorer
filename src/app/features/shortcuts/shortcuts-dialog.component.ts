@@ -51,7 +51,7 @@ import { LucideKeyboard, LucideX } from '@lucide/angular';
               <div class="space-y-2">
                 <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                   <span class="w-1.5 h-1.5 rounded-full" [ngClass]="getCategoryColor(cat)"></span>
-                  {{ cat }}
+                  {{ getCategoryTranslationKey(cat) | translate }}
                 </h3>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -98,6 +98,19 @@ export class ShortcutsDialogComponent {
 
   public getShortcutsByCategory(category: string): ShortcutDefinition[] {
     return this.shortcutsService.shortcuts.filter(s => s.category === category);
+  }
+
+  public getCategoryTranslationKey(category: string): string {
+    switch (category) {
+      case 'Map & Camera':
+        return 'shortcuts.catMapCamera';
+      case 'Modes & Layers':
+        return 'shortcuts.catModesLayers';
+      case 'World & Seed':
+        return 'shortcuts.catWorldSeed';
+      default:
+        return 'shortcuts.catGeneral';
+    }
   }
 
   public getCategoryColor(category: string): string {

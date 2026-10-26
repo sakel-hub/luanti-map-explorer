@@ -1,5 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { LocaleId, LocaleMeta, SUPPORTED_LOCALES, TranslationDictionary, TranslationKey } from './translation.types';
+import { safeGetItem, safeSetItem } from '../utils/storage.utils';
 import { en } from './locales/en';
 import { sk } from './locales/sk';
 import { de } from './locales/de';
@@ -43,9 +44,7 @@ export class TranslationService {
 
   private persistLocale(loc: LocaleId): void {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        localStorage.setItem(STORAGE_KEY, loc);
-      }
+      safeSetItem(STORAGE_KEY, loc);
       if (typeof document !== 'undefined') {
         document.documentElement.lang = loc;
       }
@@ -96,11 +95,9 @@ export class TranslationService {
         if (queryLang && DICTIONARIES[queryLang]) {
           return queryLang;
         }
-        if (window.localStorage) {
-          const saved = localStorage.getItem(STORAGE_KEY) as LocaleId;
-          if (saved && DICTIONARIES[saved]) {
-            return saved;
-          }
+        const saved = safeGetItem(STORAGE_KEY) as LocaleId | null;
+        if (saved && DICTIONARIES[saved]) {
+          return saved;
         }
       }
       if (typeof navigator !== 'undefined' && navigator.language) {

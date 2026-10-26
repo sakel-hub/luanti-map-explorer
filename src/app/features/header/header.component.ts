@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, HostListener, Output, ViewChild, inject, signal } from '@angular/core';
+import { Component, EventEmitter, HostListener, Output, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MapStore } from '../../core/state/map.store';
@@ -9,7 +9,7 @@ import { TranslationService } from '../../core/i18n/translation.service';
 import { PwaStorageService } from '../../core/services/pwa-storage.service';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { TooltipDirective } from '../../shared/directives/tooltip.directive';
-import { MapgenType, ViewMode } from '../../core/models/world.model';
+import { MapgenType } from '../../core/models/world.model';
 import {
   LucideHelpCircle,
   LucideShare2,
@@ -24,7 +24,11 @@ import {
   LucideSparkles,
   LucideDatabase,
   LucideChevronRight,
-  LucideExternalLink
+  LucideExternalLink,
+  LucideGitBranch,
+  LucideLanguages,
+  LucideWifiOff,
+  LucideRefreshCw
 } from '@lucide/angular';
 
 @Component({
@@ -48,19 +52,14 @@ import {
     LucideSparkles,
     LucideDatabase,
     LucideChevronRight,
-    LucideExternalLink
+    LucideExternalLink,
+    LucideGitBranch,
+    LucideLanguages,
+    LucideWifiOff,
+    LucideRefreshCw
   ],
   template: `
     <header class="h-12 bg-slate-950 border-b border-slate-800 px-3 flex items-center justify-between text-xs select-none z-20 relative">
-      <!-- Hidden multi-file input (accepts map.sqlite, map_meta.txt, world.mt directly - never blocked by Chrome inside ~/Library!) -->
-      <input
-        #worldFilesInput
-        type="file"
-        multiple
-        accept=".sqlite,.sqlite3,.mt,.txt"
-        (change)="onDirectoryInputChange($event)"
-        class="hidden" />
-
       <!-- ========================================== -->
       <!-- MOBILE HEADER BAR (< md)                   -->
       <!-- ========================================== -->
@@ -74,8 +73,8 @@ import {
             class="w-7 h-7 rounded-md shadow-md flex-shrink-0" />
           <div class="truncate">
             <div class="font-bold text-slate-100 text-xs tracking-tight flex items-center gap-1.5">
-              <span>Map Explorer</span>
-              <span class="text-[9px] bg-sky-950 text-sky-400 border border-sky-800 px-1 py-0.2 rounded font-mono">PWA</span>
+              <span class="truncate">{{ 'header.title' | translate }}</span>
+              <span class="text-[9px] bg-sky-950 text-sky-400 border border-sky-800 px-1 py-0.2 rounded font-mono">{{ 'header.pwaBadge' | translate }}</span>
             </div>
           </div>
         </div>
@@ -186,6 +185,19 @@ import {
             <span class="font-mono text-sky-400 font-semibold">#{{ mapStore.worldConfig().seed }}</span>
             <span class="text-slate-600">·</span>
             <span class="font-mono text-emerald-400 uppercase text-[11px] font-semibold">{{ mapStore.worldConfig().mapgen }}</span>
+            @if (mapStore.databaseBackend()) {
+              <span class="text-slate-600">·</span>
+              <span
+                class="font-mono px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border"
+                [class.bg-emerald-950]="mapStore.databaseBackend() === 'postgresql'"
+                [class.text-emerald-400]="mapStore.databaseBackend() === 'postgresql'"
+                [class.border-emerald-700]="mapStore.databaseBackend() === 'postgresql'"
+                [class.bg-cyan-950]="mapStore.databaseBackend() === 'sqlite3'"
+                [class.text-cyan-400]="mapStore.databaseBackend() === 'sqlite3'"
+                [class.border-cyan-700]="mapStore.databaseBackend() === 'sqlite3'">
+                {{ mapStore.databaseBackend() === 'postgresql' ? 'PGSQL' : 'SQLite' }}
+              </span>
+            }
           </div>
         </div>
 
@@ -193,10 +205,11 @@ import {
         <div class="flex items-center gap-1.5">
           <button
             (click)="triggerOpenWorldFolder()"
-            [appTooltip]="'Inside your world folder (e.g. SaKeL_Survival), click map.sqlite (+ ⌘-click map_meta.txt & world.mt) to enable Open'"
+            [appTooltip]="'header.openSqliteOrFiles' | translate"
+            [appTooltipShortcutId]="'open_world'"
             class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 font-semibold transition">
             <svg lucideFolderOpen class="w-3.5 h-3.5 text-emerald-400"></svg>
-            <span>Open map.sqlite / Files</span>
+            <span>{{ 'header.openSqliteOrFiles' | translate }}</span>
           </button>
 
           <button
@@ -216,27 +229,30 @@ import {
               [class.bg-sky-600]="mapStore.viewMode() === 'seed'"
               [class.text-white]="mapStore.viewMode() === 'seed'"
               [class.text-slate-400]="mapStore.viewMode() !== 'seed'"
-              [appTooltip]="'Seed Biomes Mode|1'"
+              [appTooltip]="'worldPanel.modeSeed' | translate"
+              [appTooltipShortcutId]="'mode_seed'"
               class="px-2 py-0.5 rounded font-medium transition">
-              Seed
+              {{ 'header.modeSeedShort' | translate }}
             </button>
             <button
               (click)="mapStore.setViewMode('hybrid')"
               [class.bg-sky-600]="mapStore.viewMode() === 'hybrid'"
               [class.text-white]="mapStore.viewMode() === 'hybrid'"
               [class.text-slate-400]="mapStore.viewMode() !== 'hybrid'"
-              [appTooltip]="'Hybrid (Seed + SQLite DB)|H'"
+              [appTooltip]="'worldPanel.modeHybrid' | translate"
+              [appTooltipShortcutId]="'mode_hybrid'"
               class="px-2 py-0.5 rounded font-medium transition">
-              Hybrid
+              {{ 'header.modeHybridShort' | translate }}
             </button>
             <button
               (click)="mapStore.setViewMode('db')"
               [class.bg-sky-600]="mapStore.viewMode() === 'db'"
               [class.text-white]="mapStore.viewMode() === 'db'"
               [class.text-slate-400]="mapStore.viewMode() !== 'db'"
-              [appTooltip]="'SQLite DB Blocks Only|2'"
+              [appTooltip]="'worldPanel.modeDb' | translate"
+              [appTooltipShortcutId]="'mode_db'"
               class="px-2 py-0.5 rounded font-medium transition">
-              SQLite DB
+              {{ 'header.modeDbShort' | translate }}
             </button>
           </div>
 
@@ -252,19 +268,39 @@ import {
           </button>
         </div>
 
-        <!-- Right: Language Switcher, Help, Share, GitHub, Theme -->
+        <!-- Right: PWA Offline/Update, Language Switcher, Help, Share, GitHub, Theme -->
         <div class="flex items-center gap-1.5 lg:gap-2">
+          @if (pwaStorage.isOffline()) {
+            <span
+              [appTooltip]="'header.offlineBadge' | translate"
+              class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/70 border border-amber-700/60 text-amber-300 text-[10px] font-semibold">
+              <svg lucideWifiOff class="w-3 h-3 text-amber-400"></svg>
+              <span class="hidden xl:inline">{{ 'header.offlineBadge' | translate }}</span>
+            </span>
+          }
+
+          @if (pwaStorage.updateAvailable()) {
+            <button
+              (click)="pwaStorage.applyUpdate()"
+              [appTooltip]="'header.updateAvailable' | translate"
+              class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-semibold shadow transition">
+              <svg lucideRefreshCw class="w-3 h-3"></svg>
+              <span>{{ 'header.updateAvailable' | translate }}</span>
+            </button>
+          }
+
           <!-- Language Switcher Dropdown -->
-          <div class="relative">
+          <div class="relative flex items-center bg-slate-900 border border-slate-700/80 hover:border-slate-600 rounded px-1.5 py-0.5">
+            <svg lucideLanguages class="w-3.5 h-3.5 text-sky-400 mr-1 pointer-events-none flex-shrink-0"></svg>
             <select
               [ngModel]="translationService.currentLocale()"
               (ngModelChange)="translationService.setLocale($event)"
-              appTooltip="Switch UI Language"
+              [appTooltip]="'header.languageSection' | translate"
               tooltipPosition="bottom"
-              aria-label="Language"
-              class="bg-slate-900 border border-slate-700/80 hover:border-slate-600 rounded px-1.5 py-1 text-slate-200 text-xs font-medium cursor-pointer focus:outline-none focus:border-sky-500">
+              [attr.aria-label]="'header.languageSection' | translate"
+              class="bg-transparent text-slate-200 text-xs font-medium cursor-pointer focus:outline-none py-0.5">
               @for (loc of translationService.supportedLocales; track loc.id) {
-                <option [value]="loc.id">{{ loc.flag }} {{ loc.nativeName }}</option>
+                <option [value]="loc.id" class="bg-slate-900 text-slate-100">{{ loc.flag }} · {{ loc.nativeName }}</option>
               }
             </select>
           </div>
@@ -282,6 +318,7 @@ import {
           <button
             (click)="openShare.emit()"
             [appTooltip]="'header.share' | translate"
+            [appTooltipShortcutId]="'open_share'"
             aria-label="Share Map"
             class="p-1.5 rounded bg-purple-950/40 hover:bg-purple-900/50 border border-purple-800/60 text-purple-300 hover:text-purple-200 transition">
             <svg lucideShare2 class="w-4 h-4 text-purple-400"></svg>
@@ -295,9 +332,7 @@ import {
             [appTooltip]="'header.github' | translate"
             aria-label="GitHub Repository"
             class="p-1.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-slate-100 transition flex items-center justify-center">
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-            </svg>
+            <svg lucideGitBranch class="w-4 h-4"></svg>
           </a>
 
           <!-- Theme Toggle (Dark / Light) -->
@@ -359,13 +394,13 @@ import {
         <div class="flex-1 overflow-y-auto p-4 space-y-5 text-xs text-slate-200">
           <!-- Language Selection -->
           <div class="space-y-1.5">
-            <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Language / Jazyk</label>
+            <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">{{ 'header.languageSection' | translate }}</label>
             <select
               [ngModel]="translationService.currentLocale()"
               (ngModelChange)="translationService.setLocale($event)"
               class="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-slate-100 text-xs font-medium">
               @for (loc of translationService.supportedLocales; track loc.id) {
-                <option [value]="loc.id">{{ loc.flag }} {{ loc.nativeName }} ({{ loc.name }})</option>
+                <option [value]="loc.id">{{ loc.flag }} · {{ loc.nativeName }} ({{ loc.name }})</option>
               }
             </select>
           </div>
@@ -396,7 +431,7 @@ import {
 
           <!-- Documentation & Sharing -->
           <div class="space-y-2 pt-2 border-t border-slate-800">
-            <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Documentation &amp; Sharing</label>
+            <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">{{ 'header.docsAndSharingSection' | translate }}</label>
             <div class="flex flex-col gap-2">
               <button
                 (click)="openHelp.emit(); closeMobileMenu()"
@@ -424,9 +459,7 @@ import {
                 rel="noopener noreferrer"
                 class="w-full flex items-center justify-between p-2.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700/80 text-slate-300 transition">
                 <span class="flex items-center gap-2 font-medium">
-                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-                  </svg>
+                  <svg lucideGitBranch class="w-4 h-4"></svg>
                   <span>{{ 'header.github' | translate }}</span>
                 </span>
                 <svg lucideExternalLink class="w-3.5 h-3.5 text-slate-500"></svg>
@@ -436,7 +469,7 @@ import {
 
           <!-- Appearance & Shortcuts -->
           <div class="space-y-2 pt-2 border-t border-slate-800">
-            <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Preferences</label>
+            <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">{{ 'header.preferencesSection' | translate }}</label>
             <div class="flex flex-col gap-2">
               <button
                 (click)="themeService.toggleTheme()"
@@ -471,8 +504,6 @@ import {
 export class HeaderComponent {
   @Output() openHelp = new EventEmitter<void>();
   @Output() openShare = new EventEmitter<void>();
-
-  @ViewChild('worldFilesInput') dirInputRef?: ElementRef<HTMLInputElement>;
 
   public readonly mapStore = inject(MapStore);
   public readonly worldLoader = inject(WorldLoaderService);
@@ -512,19 +543,7 @@ export class HeaderComponent {
   }
 
   public async triggerOpenWorldFolder(): Promise<void> {
-    if (this.pwaStorage.hasFileSystemAccess) {
-      await this.worldLoader.pickWorldFileViaFileSystemApi();
-    } else {
-      this.dirInputRef?.nativeElement?.click();
-    }
-  }
-
-  public async onDirectoryInputChange(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      await this.worldLoader.handleFileListInput(input.files);
-      input.value = '';
-    }
+    await this.worldLoader.openFilePicker();
   }
 
   public installPwa(): void {

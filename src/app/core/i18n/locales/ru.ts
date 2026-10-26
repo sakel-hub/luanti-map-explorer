@@ -5,6 +5,7 @@ export const ru: TranslationDictionary = {
   ...en,
   common: {
     ...en.common,
+    cancel: 'Отмена',
     close: 'Закрыть',
     save: 'Сохранить',
     reset: 'Сброс',
@@ -13,41 +14,117 @@ export const ru: TranslationDictionary = {
     download: 'Скачать',
     loading: 'Загрузка...',
     search: 'Поиск...',
-    clear: 'Очистить'
+    clear: 'Очистить',
+    stop: 'Стоп',
+    edit: 'Изменить',
+    delete: 'Удалить'
+  },
+  app: {
+    ...en.app,
+    mapView: 'Карта',
+    worldAndSeed: 'Мир и Сид',
+    dropWorldTitle: 'Перетащите папку мира Luanti или map.sqlite'
   },
   header: {
     ...en.header,
     title: 'Карта и Биомы Luanti',
     openWorldFolder: 'Открыть папку мира',
+    openSqliteOrFiles: 'Открыть map.sqlite / Файлы',
     loadDemoWorld: 'Демо-мир БД',
     randomSeed: 'Случайный сид',
     shortcuts: 'Клавиши',
     help: 'Справка',
-    share: 'Поделиться'
+    share: 'Поделиться',
+    modeSeedShort: 'Сид',
+    modeHybridShort: 'Гибрид',
+    modeDbShort: 'БД Мира',
+    languageSection: 'Язык / Language',
+    docsAndSharingSection: 'Справка и доступ',
+    preferencesSection: 'Настройки',
+    offlineBadge: 'Офлайн-режим',
+    updateAvailable: 'Доступно обновление — Обновить'
   },
   worldPanel: {
     ...en.worldPanel,
     title: 'Мир и параметры сида',
+    worldSource: 'Папка мира Luanti / БД',
     openDirectoryBtn: 'Открыть папку мира Luanti',
-    openFileSqliteBtn: 'Загрузить файл map.sqlite',
-    loadSampleDbBtn: 'Загрузить демо-базу мира',
+    openFileSqliteBtn: 'Открыть БД мира (SQLite / PostgreSQL)',
+    loadSampleDbBtn: 'Загрузить демо-мир (SQLite)',
+    loadSamplePgBtn: 'Загрузить демо-мир (PostgreSQL)',
+    exportPostgresBtn: 'Экспорт дампа PostgreSQL (.sql)',
+    backendBadge: 'Бэкенд базы данных',
+    backendSqlite: 'SQLite B-Tree',
+    backendPostgresql: 'Дамп PostgreSQL',
     modeSeed: 'Биомы по сиду',
-    modeDb: 'Только БД SQLite',
-    modeHybrid: 'Гибрид (Сид + БД)'
+    modeDb: 'Только БД мира',
+    modeHybrid: 'Гибрид (Сид + БД)',
+    coresUnit: 'ядер',
+    fitWholeWorld: 'Показать весь мир',
+    elevationSlicerTitle: 'Срез по высоте / глубине (Y)',
+    caveXrayMode: 'Рентген пещер (скрыть камень)',
+    buildingExtrusions: '3D-модели построек и флоры (БД)',
+    hypsometricColors: 'Гипсометрические цвета высот',
+    persistedBadge: 'Постоянно',
+    tilesCachedSuffix: 'тайлов в кэше'
   },
   voronoi: {
     ...en.voronoi,
     title: 'Диаграмма Вороного',
-    subtitle: '2D распределение биомов: Тепло (X) и Влажность (Y)'
+    subtitle: '2D распределение биомов: Тепло (X) и Влажность (Y)',
+    biomePaletteLabel: 'Палитра биомов / Моды',
+    customBiomeBtn: 'Свой биом',
+    addCustomBiomeTitle: 'Добавить пользовательский биом',
+    addBiomeSubmit: 'Добавить биом'
   },
   inspector: {
     ...en.inspector,
-    title: 'Инспектор и БД'
+    title: 'Инспектор и БД',
+    profileEW: 'Профиль В–З',
+    profileNS: 'Профиль С–Ю',
+    surfaceColumns: 'Поверхность'
+  },
+  markers: {
+    ...en.markers,
+    title: 'Метки',
+    savedWaypoints: 'Сохранённые точки',
+    clearAllBtn: 'Очистить всё'
+  },
+  viewport: {
+    ...en.viewport,
+    relief3dOn: '3D-рельеф ВКЛ',
+    flat2d: '2D Плоский',
+    elevColors: 'Цвета высот',
+    biomeColors: 'Цвета биомов',
+    ySliceLabel: 'Y-Срез:',
+    sliceSky: 'Небесные острова',
+    sliceSurface: 'Поверхность',
+    sliceCaves: 'Пещеры',
+    sliceDeep: 'Глубокие пещеры',
+    sliceAbyss: 'Бездна',
+    tiltLabel: 'Наклон:',
+    orbitLabel: 'Поворот:',
+    scale3dLabel: '3D Масштаб:',
+    models3dLabel: '3D Модели:',
+    baking3dTiles: 'Генерация 3D-тайлов'
+  },
+  shortcuts: {
+    ...en.shortcuts,
+    title: 'Горячие клавиши',
+    catMapCamera: 'Карта и камера',
+    catModesLayers: 'Режимы и слои',
+    catWorldSeed: 'Мир и Сид',
+    catGeneral: 'Общие'
   },
   share: {
     ...en.share,
     title: 'Поделиться картой и сидом Luanti',
     copyLink: 'Копировать ссылку',
     linkCopied: 'Скопировано!'
+  },
+  routes: {
+    ...en.routes,
+    title: 'Планировщик маршрутов',
+    trySampleRoute: 'Пробный маршрут'
   }
 };

@@ -32,6 +32,11 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "**/*",
+                "input": "sample-luanti-world",
+                "output": "sample-luanti-world"
               }
             ],
             "styles": [

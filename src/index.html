@@ -2,11 +2,11 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="utf-8" />
-    <title>Luanti Map &amp; Biome Explorer – Seed Generator, Voronoi Matrix &amp; SQLite World Viewer</title>
+    <title>Luanti Map &amp; Biome Explorer – Seed Generator, Voronoi Matrix, SQLite &amp; PostgreSQL World Viewer</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="description" content="Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite map.sqlite world viewer for Luanti and Minetest." />
-    <meta name="keywords" content="luanti, minetest, map explorer, seed generator, voronoi diagram, amidst for minetest, minetestmapper, map.sqlite, biome finder, 3d terrain, mapgen v7" />
+    <meta name="description" content="Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite &amp; PostgreSQL world viewer for Luanti and Minetest." />
+    <meta name="keywords" content="luanti, minetest, map explorer, seed generator, voronoi diagram, amidst for minetest, minetestmapper, map.sqlite, map.sql, postgresql, biome finder, 3d terrain, mapgen v7" />
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
     <meta name="theme-color" content="#0f172a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -30,8 +30,8 @@
     <!-- OpenGraph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Luanti Map &amp; Biome Explorer" />
-    <meta property="og:title" content="Luanti Map &amp; Biome Explorer – Seed Generator, Voronoi Matrix &amp; SQLite World Viewer" />
-    <meta property="og:description" content="Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite map.sqlite world viewer for Luanti and Minetest." />
+    <meta property="og:title" content="Luanti Map &amp; Biome Explorer – Seed Generator, Voronoi Matrix, SQLite &amp; PostgreSQL World Viewer" />
+    <meta property="og:description" content="Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite &amp; PostgreSQL world viewer for Luanti and Minetest." />
     <meta property="og:url" content="https://sakel-hub.github.io/luanti-map-explorer/" />
     <meta property="og:image" content="https://sakel-hub.github.io/luanti-map-explorer/logo.svg" />
     <meta property="og:image:secure_url" content="https://sakel-hub.github.io/luanti-map-explorer/logo.svg" />
@@ -48,8 +48,8 @@
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Luanti Map &amp; Biome Explorer – Seed Generator, Voronoi Matrix &amp; SQLite World Viewer" />
-    <meta name="twitter:description" content="Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite map.sqlite world viewer for Luanti and Minetest." />
+    <meta name="twitter:title" content="Luanti Map &amp; Biome Explorer – Seed Generator, Voronoi Matrix, SQLite &amp; PostgreSQL World Viewer" />
+    <meta name="twitter:description" content="Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite &amp; PostgreSQL world viewer for Luanti and Minetest." />
     <meta name="twitter:image" content="https://sakel-hub.github.io/luanti-map-explorer/logo.svg" />
     <meta name="twitter:image:alt" content="Luanti Map and Biome Explorer Interface with 3D Terrain and Voronoi Matrix" />
 
@@ -67,13 +67,13 @@
             "operatingSystem": "All",
             "softwareVersion": "1.0.0",
             "inLanguage": ["en", "sk", "de", "fr", "es", "ru"],
-            "description": "Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite map.sqlite world viewer for Luanti and Minetest.",
+            "description": "Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite & PostgreSQL world viewer for Luanti and Minetest.",
             "browserRequirements": "Requires WebGL support",
             "featureList": [
               "Procedural Seed & Biome Map Synthesis (Mapgen v7, Valleys, Carpathian, Flat)",
               "Interactive 2D Heat vs. Humidity Voronoi Matrix with Live Cursor Crosshair Synchronization",
-              "Direct Local Luanti World Directory Ingestion (world.mt, map_meta.txt, map.sqlite)",
-              "Zero-Server SQLite MapBlock Decoder (zstd & zlib Decompression, 64-bit Block Unpacking)",
+              "Direct Local Luanti World Directory Ingestion (world.mt, map_meta.txt, map.sqlite, map.sql)",
+              "Zero-Server SQLite & PostgreSQL MapBlock Decoders (zstd & zlib Decompression, 64-bit Block Unpacking)",
               "MapLibre GL JS 3D Topographic Terrain-RGB Elevation & Dynamic Hillshading",
               "Multi-Core Web Worker Pool for 60 FPS Asynchronous Tile Rendering",
               "Custom Map Markers, Player Base Discovery & Luanti Waypoints Export/Import"
@@ -94,7 +94,7 @@
             "@id": "https://sakel-hub.github.io/luanti-map-explorer/#website",
             "url": "https://sakel-hub.github.io/luanti-map-explorer/",
             "name": "Luanti Map & Biome Explorer",
-            "description": "Online seed biome explorer, Voronoi diagram inspector, and SQLite world mapper for Luanti and Minetest.",
+            "description": "Online seed biome explorer, Voronoi diagram inspector, and SQLite & PostgreSQL world mapper for Luanti and Minetest.",
             "inLanguage": "en-US"
           }
         ]
@@ -113,7 +113,7 @@
             </h1>
           </div>
           <p class="text-sm sm:text-base text-slate-300 leading-relaxed">
-            The modern, accessible, open-source Seed Biome Generator, Interactive Voronoi Inspector, and SQLite World Map Viewer for
+            The modern, accessible, open-source Seed Biome Generator, Interactive Voronoi Inspector, and SQLite &amp; PostgreSQL World Map Viewer for
             <strong>Luanti</strong> (formerly Minetest) players, server administrators, and mod developers.
           </p>
         </header>
@@ -145,10 +145,10 @@
           </section>
 
           <section class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
-            <h2 class="text-sm font-semibold text-purple-400 mb-1.5">Local World Folder &amp; SQLite DB Reader</h2>
+            <h2 class="text-sm font-semibold text-purple-400 mb-1.5">Local World Folder, SQLite &amp; PostgreSQL DB Reader</h2>
             <p>
               Point directly to any local Luanti world folder to automatically parse <code>world.mt</code>,
-              <code>map_meta.txt</code>, and <code>map.sqlite</code>. Decodes 64-bit packed block coordinates
+              <code>map_meta.txt</code>, and <code>map.sqlite</code> or <code>map.sql</code>. Decodes 64-bit packed block coordinates
               and decompresses zstd/zlib MapBlock blobs to render player builds and explored terrain.
             </p>
           </section>

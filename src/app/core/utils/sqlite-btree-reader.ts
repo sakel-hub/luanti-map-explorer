@@ -1,4 +1,11 @@
-import type { DiscoveredWorldRegion, VerticalLayerSummary, VerticalSlicePresetId } from '../models/world.model';
+import type {
+  DatabaseOverviewSummary,
+  DiscoveredWorldRegion,
+  RawMapBlockRow,
+  VerticalLayerSummary,
+  VerticalSlicePresetId,
+  WorldDatabaseReader
+} from '../models/world.model';
 import { packBlockPos, unpackBlockPos } from './mapblock-parser';
 
 interface VarintResult {
@@ -6,29 +13,8 @@ interface VarintResult {
   bytes: number;
 }
 
-export interface RawSqliteMapBlockRow {
-  x: number;
-  y: number;
-  z: number;
-  rowid: number;
-  data: Uint8Array;
-}
-
-export interface SqliteOverviewSummary {
-  hasXyzSchema: boolean;
-  estimatedTotalBlocks: number;
-  minBlockX: number;
-  maxBlockX: number;
-  minBlockZ: number;
-  maxBlockZ: number;
-  exploredBlockKeys: Set<string>;
-  discoveredRegions: DiscoveredWorldRegion[];
-  verticalLayers: VerticalLayerSummary[];
-  /** All non-empty 64x64 MapBlock macro sectors across the database */
-  exploredMacroSectors: Array<{ mx: number; mz: number }>;
-  /** Interior B-Tree divider keys with exact rowids for instant global mipmap sampling */
-  dividerSamples: Array<{ x: number; y: number; z: number; rowid: number }>;
-}
+export type RawSqliteMapBlockRow = RawMapBlockRow;
+export type SqliteOverviewSummary = DatabaseOverviewSummary;
 
 const CHUNK_SIZE_BYTES = 512 * 1024; // 512 KB per slice read
 const MAX_CACHED_CHUNKS = 64; // Max 32 MB RAM cache for random-access file slices
@@ -36,7 +22,12 @@ const MAX_CACHED_CHUNKS = 64; // Max 32 MB RAM cache for random-access file slic
 /**
  * Zero-OOM Random-Access SQLite3 B-Tree Reader operating directly on `File.slice()`.
  */
-export class SqliteFileBtreeReader {
+export class SqliteFileBtreeReader implements WorldDatabaseReader {
+  public readonly backendType = 'sqlite3' as const;
+  public get fileName(): string {
+    return this.file.name;
+  }
+
   private readonly file: File;
   public pageSize = 4096;
   public usableSize = 4096;
@@ -566,6 +557,7 @@ export class SqliteFileBtreeReader {
       : allRegions;
 
     return {
+      backendType: 'sqlite3',
       hasXyzSchema: this.hasXyzSchema,
       estimatedTotalBlocks: Math.max(exploredBlockKeys.size, totalSamples * sampleMultiplier),
       minBlockX,
@@ -605,10 +597,10 @@ export class SqliteFileBtreeReader {
           data: blob
         });
       }
-      if ((i & 7) === 7 || i === sorted.length - 1) {
+      if ((i & 3) === 3 || i === sorted.length - 1) {
         onProgress?.(i + 1, sorted.length);
         const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        if (now - lastYieldMs >= 24) {
+        if (now - lastYieldMs >= 8) {
           lastYieldMs = now;
           await new Promise(resolve => setTimeout(resolve, 0));
         }
@@ -666,9 +658,9 @@ export class SqliteFileBtreeReader {
         return;
       }
       pagesVisited++;
-      if ((pagesVisited & 31) === 0) {
+      if ((pagesVisited & 7) === 0) {
         const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        if (now - lastYieldMs >= 24) {
+        if (now - lastYieldMs >= 8) {
           lastYieldMs = now;
           await new Promise(resolve => setTimeout(resolve, 0));
         }
@@ -832,9 +824,9 @@ export class SqliteFileBtreeReader {
         return;
       }
       pagesVisited++;
-      if ((pagesVisited & 31) === 0) {
+      if ((pagesVisited & 7) === 0) {
         const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        if (now - lastYieldMs >= 24) {
+        if (now - lastYieldMs >= 8) {
           lastYieldMs = now;
           await new Promise(resolve => setTimeout(resolve, 0));
         }
@@ -1135,9 +1127,9 @@ export class SqliteFileBtreeReader {
         return;
       }
       pagesVisited++;
-      if ((pagesVisited & 31) === 0) {
+      if ((pagesVisited & 7) === 0) {
         const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        if (now - lastYieldMs >= 24) {
+        if (now - lastYieldMs >= 8) {
           lastYieldMs = now;
           await new Promise(resolve => setTimeout(resolve, 0));
         }
@@ -1674,5 +1666,9 @@ export class SqliteFileBtreeReader {
     if (st === 6 || st === 7) return 8;
     if (st >= 12) return Math.floor((st - 12) / 2);
     return 0;
+  }
+
+  public close(): void {
+    this.chunkCache.clear();
   }
 }

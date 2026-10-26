@@ -8,6 +8,7 @@ import { AltitudeBand, BiomePaletteMode } from '../../core/models/world.model';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { TooltipDirective } from '../../shared/directives/tooltip.directive';
 import {
+  LucideChevronDown,
   LucideCrosshair,
   LucidePlus,
   LucideRotateCcw,
@@ -26,6 +27,7 @@ import {
     FormsModule,
     TranslatePipe,
     TooltipDirective,
+    LucideChevronDown,
     LucideCrosshair,
     LucidePlus,
     LucideRotateCcw,
@@ -37,7 +39,7 @@ import {
       <!-- Dynamic Modded / Biome Palette Mode Switcher (Everness + Custom SQLite DB Auto-Sync) -->
       <div class="p-2 rounded-xl bg-slate-950/90 border border-slate-800 space-y-1.5 flex-shrink-0">
         <div class="flex items-center justify-between text-[10px]">
-          <span class="font-semibold uppercase tracking-wider text-slate-400">Biome Palette / Mods</span>
+          <span class="font-semibold uppercase tracking-wider text-slate-400">{{ 'voronoi.biomePaletteLabel' | translate }}</span>
           <div class="flex items-center gap-1">
             @if (mapStore.discoveredModBiomes().length > 0) {
               <span
@@ -55,25 +57,25 @@ import {
                 tooltipPosition="left"
                 class="px-1.5 py-0.5 rounded bg-amber-950/80 hover:bg-amber-900 border border-amber-700/70 text-amber-300 font-semibold flex items-center gap-1 transition cursor-pointer">
                 <svg lucideRotateCcw class="w-2.5 h-2.5"></svg>
-                <span>Reset</span>
+                <span>{{ 'common.reset' | translate }}</span>
               </button>
             }
           </div>
         </div>
-        <div class="grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
-          @for (mode of paletteModes; track mode.id) {
-            <button
-              type="button"
-              (click)="mapStore.setBiomePaletteMode(mode.id)"
-              [appTooltip]="mode.tooltip"
-              tooltipPosition="bottom"
-              [class.bg-emerald-600]="mapStore.biomePaletteMode() === mode.id"
-              [class.text-white]="mapStore.biomePaletteMode() === mode.id"
-              [class.text-slate-400]="mapStore.biomePaletteMode() !== mode.id"
-              class="py-1 px-1 rounded text-[10px] font-semibold transition truncate cursor-pointer text-center">
-              {{ mode.labelKey | translate }}
-            </button>
-          }
+        <div class="relative">
+          <select
+            [ngModel]="mapStore.biomePaletteMode()"
+            (ngModelChange)="mapStore.setBiomePaletteMode($event)"
+            class="w-full bg-slate-900 border border-slate-700/80 hover:border-slate-600 focus:border-emerald-500 rounded-lg py-1.5 pl-2.5 pr-8 text-xs text-slate-200 font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer appearance-none transition">
+            @for (mode of paletteModes; track mode.id) {
+              <option [value]="mode.id" class="bg-slate-900 text-slate-200 py-1">
+                {{ mode.labelKey | translate }}
+              </option>
+            }
+          </select>
+          <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-slate-400">
+            <svg lucideChevronDown class="w-3.5 h-3.5"></svg>
+          </div>
         </div>
       </div>
 
@@ -124,7 +126,7 @@ import {
           <div class="pt-1.5 border-t border-sky-800/60 grid grid-cols-2 gap-2 text-[10px]">
             <label class="space-y-0.5">
               <div class="flex justify-between text-amber-300 font-mono">
-                <span>Heat Point:</span>
+                <span>{{ 'voronoi.heatPointLabel' | translate }}</span>
                 <span>{{ isolated.heatPoint }}°</span>
               </div>
               <input
@@ -139,7 +141,7 @@ import {
             </label>
             <label class="space-y-0.5">
               <div class="flex justify-between text-sky-300 font-mono">
-                <span>Humidity Pt:</span>
+                <span>{{ 'voronoi.humidityPointLabel' | translate }}</span>
                 <span>{{ isolated.humidityPoint }}%</span>
               </div>
               <input
@@ -325,7 +327,7 @@ import {
           @if (sample.secondBiome && sample.secondVoronoiDistance !== undefined) {
             <div class="flex items-center justify-between text-[10px] px-2 py-1 rounded bg-slate-900/90 border border-slate-800/80 text-slate-300">
               <span class="truncate">
-                Next closest: <strong class="text-slate-100">{{ sample.secondBiome.name }}</strong>
+                {{ 'voronoi.nextClosestLabel' | translate }} <strong class="text-slate-100">{{ sample.secondBiome.name }}</strong>
               </span>
               <span
                 appTooltip="Climate distance margin (Δd = d₂ - d₁) to the nearest neighboring Voronoi biome border"
@@ -346,7 +348,7 @@ import {
       <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
         <div class="flex items-center justify-between">
           <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            Biome Voronoi Seeds ({{ filteredBiomes().length }})
+            {{ 'voronoi.biomeSeedsList' | translate }} ({{ filteredBiomes().length }})
           </div>
           <button
             type="button"
@@ -355,14 +357,14 @@ import {
             tooltipPosition="left"
             class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] font-semibold text-sky-300 flex items-center gap-1 transition cursor-pointer">
             <svg lucidePlus class="w-3 h-3"></svg>
-            <span>Custom Biome</span>
+            <span>{{ 'voronoi.customBiomeBtn' | translate }}</span>
           </button>
         </div>
 
         @if (showCustomBiomeForm()) {
           <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-700 space-y-2">
             <div class="text-[10px] font-semibold uppercase tracking-wider text-sky-300">
-              Add Custom Voronoi Biome
+              {{ 'voronoi.addCustomBiomeTitle' | translate }}
             </div>
             <div class="flex gap-1.5">
               <input
@@ -402,10 +404,10 @@ import {
                   [(ngModel)]="newBiomeBand"
                   aria-label="Custom biome altitude band"
                   class="w-full px-1 py-1 rounded bg-slate-950 border border-slate-700 text-slate-100">
-                  <option value="lowland">Lowland</option>
-                  <option value="ocean">Ocean</option>
-                  <option value="highland">Highland</option>
-                  <option value="underground">Underground</option>
+                  <option value="lowland">{{ 'voronoi.bandLowland' | translate }}</option>
+                  <option value="ocean">{{ 'voronoi.bandOcean' | translate }}</option>
+                  <option value="highland">{{ 'voronoi.bandHighland' | translate }}</option>
+                  <option value="underground">{{ 'voronoi.bandUnderground' | translate }}</option>
                 </select>
               </label>
             </div>
@@ -420,13 +422,13 @@ import {
                 type="button"
                 (click)="showCustomBiomeForm.set(false)"
                 class="px-2 py-1 rounded bg-slate-950 text-slate-400 text-[10px]">
-                Cancel
+                {{ 'common.cancel' | translate }}
               </button>
               <button
                 type="button"
                 (click)="createCustomBiome()"
                 class="px-2.5 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-semibold text-[10px]">
-                Add Biome
+                {{ 'voronoi.addBiomeSubmit' | translate }}
               </button>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { MapStore } from '../../core/state/map.store';
 import { TooltipDirective } from '../../shared/directives/tooltip.directive';
+import { copyWithSignalFeedback } from '../../core/utils/format.utils';
 import {
   LucideShare2,
   LucideX,
@@ -10,7 +11,8 @@ import {
   LucideCheck,
   LucideMessageSquare,
   LucideGlobe,
-  LucideExternalLink
+  LucideExternalLink,
+  LucideSend
 } from '@lucide/angular';
 
 @Component({
@@ -26,7 +28,8 @@ import {
     LucideCheck,
     LucideMessageSquare,
     LucideGlobe,
-    LucideExternalLink
+    LucideExternalLink,
+    LucideSend
   ],
   template: `
     <div
@@ -121,7 +124,7 @@ import {
                 target="_blank"
                 rel="noopener noreferrer"
                 class="p-2.5 bg-slate-950/70 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/50 rounded-xl flex items-center gap-2.5 text-xs text-slate-200 transition group">
-                <span class="text-base">𝕏</span>
+                <svg lucideSend class="w-4 h-4 text-sky-400"></svg>
                 <span class="font-medium group-hover:text-sky-400 transition">{{ 'share.shareOnX' | translate }}</span>
               </a>
 
@@ -206,6 +209,7 @@ export class ShareDialogComponent {
     const cfg = this.mapStore.worldConfig();
     const pos = this.mapStore.cursorPos();
     const cam = this.mapStore.cameraState();
+    const slice = this.mapStore.verticalSlice();
     const params = new URLSearchParams({
       seed: String(cfg.seed),
       mg: cfg.mapgen,
@@ -214,6 +218,14 @@ export class ShareDialogComponent {
       z: String(pos.z),
       zoom: cam.zoom.toFixed(1)
     });
+    if (this.mapStore.terrain3dEnabled()) {
+      params.set('r3d', '1');
+      params.set('pitch', String(Math.round(cam.pitch)));
+    }
+    if (slice.presetId !== 'surface') {
+      params.set('yMin', String(slice.minY));
+      params.set('yMax', String(slice.maxY));
+    }
     return `${base}?${params.toString()}`;
   });
 
@@ -259,29 +271,13 @@ export class ShareDialogComponent {
     }
   }
 
-  async copyLink(): Promise<void> {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(this.shareUrl());
-        this.copied.set(true);
-        setTimeout(() => this.copied.set(false), 2000);
-      }
-    } catch {
-      // Ignore clipboard error
-    }
+  copyLink(): void {
+    copyWithSignalFeedback(this.shareUrl(), this.copied, 2000);
   }
 
-  async copyDiscordMarkdown(): Promise<void> {
+  copyDiscordMarkdown(): void {
     const text = `**${this.shareTitle()}**\n${this.shareText}\n${this.shareUrl()}`;
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(text);
-        this.copied.set(true);
-        setTimeout(() => this.copied.set(false), 2000);
-      }
-    } catch {
-      // Ignore clipboard error
-    }
+    copyWithSignalFeedback(text, this.copied, 2000);
   }
 
   async shareNative(): Promise<void> {

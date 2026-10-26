@@ -9,7 +9,6 @@
         "files": [
           "/favicon.ico",
           "/logo.svg",
-          "/sql-wasm.wasm",
           "/index.csr.html",
           "/index.html",
           "/manifest.webmanifest",
@@ -20,11 +19,11 @@
     },
     {
       "name": "assets",
-      "installMode": "prefetch",
+      "installMode": "lazy",
       "updateMode": "prefetch",
       "resources": {
         "files": [
-          "/icons/**",
+          "/sample-luanti-world/**",
           "/**/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2|wasm)"
         ]
       }
