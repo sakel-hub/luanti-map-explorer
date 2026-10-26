@@ -19,3 +19,34 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+## Media & Textures Attribution
+
+This application includes game assets and textures used for rendering authentic 2.5D tree billboards, biomes, and terrain elements, sourced from official Luanti / Minetest games and community mods:
+
+### 1. Minetest Game (`default:*`)
+- **License**: Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
+- **Source**: [Minetest Game](https://github.com/minetest/minetest_game)
+- **Authors**: Perttu Ahola (celeron55) <celeron55@gmail.com> and Minetest Game contributors.
+- **Full Legal Text**: https://creativecommons.org/licenses/by-sa/3.0/
+
+### 2. Everness Mod (`everness:*`)
+- **License**: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+- **Source**: [Everness Mod for Luanti](https://content.luanti.org/packages/SaKeL/everness/)
+- **Authors**: SaKeL and Everness contributors.
+- **Full Legal Text**: https://creativecommons.org/licenses/by-sa/4.0/
+
+### 3. Ethereal Mod (`ethereal:*`)
+- **License**: Creative Commons CC0 1.0 Universal (Public Domain) / MIT License
+- **Source**: [Ethereal NG Mod for Luanti](https://content.luanti.org/packages/TenPlus1/ethereal/)
+- **Authors**: TenPlus1 and Ethereal contributors.
+- **Full Legal Text**: https://creativecommons.org/publicdomain/zero/1.0/
+
+### 4. VoxeLibre / MineClone 2 (`mcl_*`)
+- **License**: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+- **Source**: [VoxeLibre / MineClone 2](https://content.luanti.org/packages/Wuzzy/mineclone2/)
+- **Authors**: XSSheep (Pixel Perfection), MysticTempest, EmoryNB, Wuzzy, and VoxeLibre contributors.
+- **Full Legal Text**: https://creativecommons.org/licenses/by-sa/4.0/
+

@@ -24,7 +24,7 @@ yarn-error.log
 .vscode/
 .history/
 
-# AI Assistants and Agent Workspaces
+# AI Assistants, Temporary Scripts, and Agent Workspaces
 .agents/
 .gemini/
 .claude/
@@ -37,6 +37,10 @@ yarn-error.log
 .aider*
 *.system_generated
 .system_generated/
+scripts/verify.mjs
+*.py
+__pycache__/
+*.pyc
 
 # Miscellaneous
 /.angular/cache

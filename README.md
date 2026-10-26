@@ -2,14 +2,14 @@
 
 <p align="center">
   <a href="https://sakel-hub.github.io/luanti-map-explorer/">
-    <img src="public/logo.svg" alt="Luanti Map & Biome Explorer Logo" width="128" height="128">
+    <img src="screenshot.png" alt="Luanti Map & Biome Explorer Screenshot" width="100%">
   </a>
 </p>
 
 <h3 align="center">Luanti Map &amp; Biome Explorer</h3>
 
 <p align="center">
-  <strong>Seed Biome Generator, Interactive Heat/Humidity Voronoi Matrix, 2D/3D Topographic Terrain &amp; Offline SQLite World Viewer for Luanti</strong>
+  <strong>Seed Biome Generator, Interactive Heat/Humidity Voronoi Matrix, 2D/3D Topographic Terrain &amp; Offline SQLite / PostgreSQL World Viewer for Luanti</strong>
 </p>
 
 <p align="center">
@@ -39,13 +39,16 @@ A modern, high-performance, offline-first Progressive Web App (PWA) built with *
 
 ## ✨ Key Features
 
-### 🗺️ Dual-Engine Map Viewport (2D & 3D Topographic Relief)
+### 🗺️ Dual-Engine Map Viewport (2D, 3D Topographic Relief & 3D Extrusions)
 - **2D Topographic Vector Map**: Smooth orthographic projection mapping Cartesian Luanti block coordinates directly to bijective Mercator tiles.
-- **3D Terrarium DEM Hillshading (`3`)**: Encodes digital elevation models into real-time terrain relief with camera pitch (`0°–85°`), bearing rotation (`0°–360°`), and contour shading.
+- **3D Terrarium DEM Hillshading (`3`)**: Encodes digital elevation models into real-time terrain relief with camera pitch (`0°–75°`), bearing rotation (`-180°–180°`), vertical scale exaggeration, and contour shading.
+- **2.5D Camera-Facing Tree Sprites (Billboard) (`T`)**: Renders authentic pixel-sharp retro sapling and flora billboards anchored to 3D terrain elevation in both DB Mode (scanned SQLite/PostgreSQL tree trunks) and Seed Mode (deterministic procedural biomes) across Minetest Game, Everness, Ethereal, and MineClone.
+- **3D Voxel Structures & Tall Flora Extrusions**: Extrudes player structures, mapgen architecture, Everness crystal pillars, and bamboo forests in Detail 1:1 view with filter modes (`All`, `Pillars & Flora`, `Structures Only`, `OFF`).
+- **4-Tier LOD Streaming Presets**: Switch seamlessly between **World 4×4 (64n)**, **Region 2×2 (32n)**, **Sector 1×1 (16n)**, and **Detail 1:1 (1n)** levels of detail.
 - **Multi-Source Display Presets**:
-  - **Seed Mode (`1`)**: Real-time procedural Mapgen v7 biome preview generated on the fly.
-  - **SQLite DB Mode (`2`)**: Visualizes saved chunks and player modifications directly from `map.sqlite`.
-  - **Hybrid Mode (`H`)**: Overlays discovered player builds, structures, and explored sectors seamlessly over procedural background biomes.
+  - **Seed Mode (`1`)**: Real-time procedural Mapgen v7 / Valleys / Carpathian / Flat biome preview generated on the fly.
+  - **Database Mode (`2`)**: Visualizes saved chunks and player modifications directly from `map.sqlite` or PostgreSQL dump `map.sql`.
+  - **Hybrid Mode (`H`)**: Overlays discovered player builds, structures, and explored sectors seamlessly over darkened procedural background biomes.
 
 ### 🎲 Procedural Seed Generator & Voronoi Matrix
 - **Mapgen v7 Perlin Noise Engine**: Multi-octave 2D/3D Perlin noise generator modeling terrain height, heat variations, and humidity spreads.
@@ -55,12 +58,13 @@ A modern, high-performance, offline-first Progressive Web App (PWA) built with *
   - **Click-to-Isolate**: Click any biome cell to instantly highlight its distribution across the entire world map.
   - **Game & Mod Palette Filters**: Filter Voronoi cells between **Auto**, **All**, **Vanilla MTG**, **Everness**, **Ethereal**, and **MineClone**.
 
-### 📂 Offline SQLite `map.sqlite` World Explorer
-- **100% Client-Side Privacy**: Opens local Luanti world folders or `map.sqlite` databases directly in your browser without uploading data to external servers.
-- **Continuous B-Tree Indexing**: Traverses SQLite interior routing pages for gap-free continuous $Z$-axis coverage, completely eliminating zebra striping.
+### 📂 Offline SQLite & PostgreSQL (`map.sqlite` / `map.sql`) World Explorer
+- **100% Client-Side Privacy**: Opens local Luanti world folders, `map.sqlite` databases, or PostgreSQL text dumps (`map.sql`, `pg_dump -t blocks -d luanti_world`) directly in your browser without uploading data to external servers.
+- **Continuous B-Tree & 2MB Chunked SQL Streaming**: Traverses SQLite interior routing pages and streams large PostgreSQL text dumps using zero-OOM memory-efficient chunk slicing.
 - **Vertical Elevation Slices**: Inspect specific horizontal depth slices (e.g. Surface, Sky Islands at $Y > 500$, or Underground Caves at $Y < -100$).
 - **Macroscopic Mipmapping**: Progressive coarse streaming renders entire worlds spanning 30,000+ nodes in low-res preview mode.
 - **Automatic Base & Structure Discovery**: Heuristically detects concentrated clusters of player-crafted nodes (wood, brick, glass, torches, stone bricks).
+- **Cross-Backend SQL Export**: Convert and export any loaded world directly into a PostgreSQL SQL dump (`COPY public.blocks (pos, data) FROM stdin;`).
 
 ### 🧭 3D Voxel Route Planner
 - **Multi-Modal Dijkstra / A* Pathfinding**: Calculates optimal 3D trajectories between any two coordinates in the world.
@@ -93,16 +97,23 @@ A modern, high-performance, offline-first Progressive Web App (PWA) built with *
 
 | Shortcut | Action | Description |
 |:---:|:---|:---|
+| <kbd>0</kbd> / <kbd>Home</kbd> | **Origin (0, 0)** | Center map camera on Spawn Origin `(0, 0)` |
+| <kbd>F</kbd> | **Fit World** | Fit camera to explored SQLite world bounds |
+| <kbd>M</kbd> | **Pin Marker** | Drop a custom waypoint marker at current cursor coordinates |
+| <kbd>3</kbd> | **Toggle 3D** | Toggle 3D Terrarium DEM topographic relief |
+| <kbd>N</kbd> | **Reset Camera** | Reset camera bearing, pitch, and 3D scale to North defaults |
+| <kbd>G</kbd> | **Chunk Grid** | Toggle Luanti MapBlock (16×16) & MapChunk (80×80) grid |
 | <kbd>1</kbd> | **Seed Mode** | Switch to procedural seed biome view |
 | <kbd>2</kbd> | **DB Mode** | Switch to saved `map.sqlite` blocks only |
 | <kbd>H</kbd> | **Hybrid Mode** | Overlay explored chunks onto procedural background |
-| <kbd>3</kbd> | **Toggle 3D** | Toggle 3D Terrarium DEM topographic relief |
-| <kbd>R</kbd> | **Reset Camera** | Reset camera bearing and pitch to top-down North |
+| <kbd>V</kbd> | **Voronoi Borders** | Toggle Voronoi biome cell boundary contours on map |
+| <kbd>L</kbd> | **Hillshade** | Toggle directional 2.5D solar hillshading |
+| <kbd>T</kbd> | **Tree Sprites** | Toggle 2.5D camera-facing tree billboards |
 | <kbd>O</kbd> | **Open World** | Open local Luanti world folder or `map.sqlite` |
-| <kbd>V</kbd> | **Voronoi Panel** | Toggle the Heat/Humidity Voronoi diagram panel |
-| <kbd>P</kbd> | **Route Planner** | Toggle the 3D Voxel Route Planner panel |
-| <kbd>M</kbd> | **Waypoints** | Toggle Markers & Waypoints drawer |
+| <kbd>R</kbd> | **Random Seed** | Generate and preview a random procedural world seed |
+| <kbd>P</kbd> | **Route Planner** | Focus the 3D Voxel Route Planner panel |
 | <kbd>S</kbd> | **Share** | Open the deep-link world share dialog |
+| <kbd>Esc</kbd> | **Clear Filter** | Clear active Voronoi biome isolation filter |
 | <kbd>?</kbd> | **Shortcuts** | Show keyboard shortcuts modal |
 
 ---
