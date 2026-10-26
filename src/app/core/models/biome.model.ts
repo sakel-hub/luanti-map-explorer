@@ -15,6 +15,8 @@ export interface BiomeDefinition {
   fillerNode: string;
   stoneNode: string;
   description: string;
+  saplingKey?: string;
+  treeDensity?: number;
 }
 
 export interface ClimateSample {

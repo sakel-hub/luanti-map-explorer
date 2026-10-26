@@ -57,5 +57,10 @@ export class ThemeService {
       root.classList.remove('dark');
       root.classList.add('light');
     }
+
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta) {
+      themeColorMeta.setAttribute('content', theme === 'dark' ? '#0f172a' : '#f8fafc');
+    }
   }
 }

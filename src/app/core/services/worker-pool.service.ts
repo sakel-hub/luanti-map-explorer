@@ -79,6 +79,27 @@ export class WorkerPoolService {
     this.l1TileCache.clear();
   }
 
+  /**
+   * Immediately purges all queued (unstarted) 3D 'terrain-dem' jobs when 3D Relief mode is disabled
+   * so background workers stop baking 3D elevation tiles in 2D Flat mode.
+   */
+  public cancelPendingDemTiles(): void {
+    let removed = false;
+    for (let i = this.queue.length - 1; i >= 0; i--) {
+      if (this.queue[i].job.tileKind === 'terrain-dem') {
+        const [dropped] = this.queue.splice(i, 1);
+        const err = new DOMException('Aborted', 'AbortError');
+        for (const rej of dropped.rejecters) {
+          rej(err);
+        }
+        removed = true;
+      }
+    }
+    if (removed) {
+      this.updateActiveCount();
+    }
+  }
+
   private initWorkerPool(): void {
     if (typeof Worker === 'undefined') {
       return;
@@ -162,15 +183,24 @@ export class WorkerPoolService {
   public appendCompactBlocksToWorkers(
     blockEntries: Array<[string, CompactBlockSurface]>,
     mipmapEntries: Array<[string, MacroMipmapCell]>,
-    evictedKeys: string[] = []
+    evictedKeys: string[] = [],
+    evictedMipKeys: string[] = []
   ): void {
-    if (blockEntries.length === 0 && mipmapEntries.length === 0 && evictedKeys.length === 0) return;
+    if (
+      blockEntries.length === 0 &&
+      mipmapEntries.length === 0 &&
+      evictedKeys.length === 0 &&
+      evictedMipKeys.length === 0
+    ) {
+      return;
+    }
     for (const inst of this.pool) {
       inst.worker.postMessage({
         type: 'APPEND_DB_BLOCKS',
         blockEntries,
         mipmapEntries,
-        evictedKeys
+        evictedKeys,
+        evictedMipKeys
       });
     }
   }
@@ -180,8 +210,14 @@ export class WorkerPoolService {
     zoom: number,
     tx: number,
     ty: number,
-    revision = 0
+    revision = 0,
+    abortSignal?: AbortSignal,
+    cameraZoom?: number
   ): Promise<ArrayBuffer> {
+    if (abortSignal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     if (revision > this.latestRequestedRevision) {
       this.latestRequestedRevision = revision;
     }
@@ -193,8 +229,9 @@ export class WorkerPoolService {
     const cfg = this.mapStore.worldConfig();
     const vSlice = this.mapStore.verticalSlice();
     const customBiomes = this.mapStore.activeBiomes();
+    const tierTag = cameraZoom !== undefined && cameraZoom < 6.0 ? 'm' : 'd';
 
-    const cacheKey = `${cfg.seed}_${cfg.mapgen}_${this.mapStore.viewMode()}_${vSlice.presetId}_${vSlice.minY}_${vSlice.maxY}_${vSlice.caveMode ? 1 : 0}_${this.mapStore.isolatedBiomeId() || 'none'}_${this.mapStore.hypsometricMode() ? 1 : 0}_${this.mapStore.hillshadeEnabled() ? 1 : 0}_${this.mapStore.voronoiContoursEnabled() ? 1 : 0}_${this.mapStore.exploredBoundsEnabled() ? 1 : 0}_r${revision}/${coordKey}`;
+    const cacheKey = `v2_${cfg.seed}_${cfg.mapgen}_${this.mapStore.viewMode()}_${vSlice.presetId}_${vSlice.minY}_${vSlice.maxY}_${vSlice.caveMode ? 1 : 0}_${this.mapStore.isolatedBiomeId() || 'none'}_${this.mapStore.hypsometricMode() ? 1 : 0}_${this.mapStore.hillshadeEnabled() ? 1 : 0}_${this.mapStore.voronoiContoursEnabled() ? 1 : 0}_${this.mapStore.exploredBoundsEnabled() ? 1 : 0}_${tierTag}_r${revision}/${coordKey}`;
 
     // 1. Check L1 In-Memory RAM Cache (Instant 0ms synchronous return)
     const l1Hit = this.l1TileCache.get(cacheKey);
@@ -204,6 +241,9 @@ export class WorkerPoolService {
 
     // 2. Check L2 IndexedDB Persistent Cache (< 2ms lookup without worker computation)
     const l2Hit = await this.pwaStorage.getTile(cacheKey);
+    if (abortSignal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
     if (l2Hit) {
       this.putL1Tile(cacheKey, l2Hit.slice(0));
       return l2Hit;
@@ -218,8 +258,9 @@ export class WorkerPoolService {
     const job: TileRenderJobPayload = {
       jobId: this.nextJobId++,
       zoom,
+      cameraZoom,
       tileKind,
-      tileSize: 128,
+      tileSize: tileKind === 'terrain-dem' ? 64 : 128,
       minX: bounds.minX,
       maxX: bounds.maxX,
       minZ: bounds.minZ,
@@ -258,11 +299,36 @@ export class WorkerPoolService {
     }
 
     return new Promise<ArrayBuffer>((resolve, reject) => {
+      const attachAbortCleanup = (target: QueuedJob) => {
+        if (!abortSignal) return;
+        const onAbort = () => {
+          const rIdx = target.resolvers.indexOf(resolve);
+          if (rIdx !== -1) {
+            target.resolvers.splice(rIdx, 1);
+            target.rejecters.splice(rIdx, 1);
+          }
+          if (target.resolvers.length === 0) {
+            const qIdx = this.queue.indexOf(target);
+            if (qIdx !== -1) {
+              this.queue.splice(qIdx, 1);
+              this.updateActiveCount();
+            }
+          }
+          reject(new DOMException('Aborted', 'AbortError'));
+        };
+        if (abortSignal.aborted) {
+          onAbort();
+          return;
+        }
+        abortSignal.addEventListener('abort', onAbort, { once: true });
+      };
+
       // If an in-flight worker job is already rendering this exact cacheKey, Piggyback on it
       for (const inFlight of this.pendingMap.values()) {
         if (inFlight.cacheKey === cacheKey) {
           inFlight.resolvers.push(resolve);
           inFlight.rejecters.push(reject);
+          attachAbortCleanup(inFlight);
           return;
         }
       }
@@ -279,6 +345,7 @@ export class WorkerPoolService {
         }
         existingQueued.resolvers.push(resolve);
         existingQueued.rejecters.push(reject);
+        attachAbortCleanup(existingQueued);
         this.dispatchNext();
         return;
       }
@@ -301,6 +368,7 @@ export class WorkerPoolService {
         }
       }
       this.queue.push(queued);
+      attachAbortCleanup(queued);
       this.dispatchNext();
     });
   }
@@ -310,14 +378,16 @@ export class WorkerPoolService {
       const idleWorker = this.pool.find(w => !w.busy);
       if (!idleWorker) break;
 
-      // Prioritize tiles matching the latest requested zoom & revision (without rejecting multi-zoom 3D pitch tiles!)
-      let bestIdx = this.queue.length - 1;
+      // Drain tiles in strict FIFO order (prioritizing visible 'color' tiles ahead of 'terrain-dem'
+      // mesh tiles) without penalizing horizon/midground zoom levels in 3D pitched views so MapLibre's
+      // 16-slot ImageRequest concurrency window is never starved!
+      let bestIdx = 0;
       let bestScore = -Infinity;
       for (let i = 0; i < this.queue.length; i++) {
         const q = this.queue[i];
-        const zoomDiff = Math.abs((q.job.zoom ?? this.latestRequestedZoom) - this.latestRequestedZoom);
-        const score = q.revision * 100 - zoomDiff * 10 + i * 0.01;
-        if (score >= bestScore) {
+        const kindBonus = q.job.tileKind === 'color' ? 10 : 0;
+        const score = kindBonus - i * 0.01;
+        if (score > bestScore) {
           bestScore = score;
           bestIdx = i;
         }

@@ -24,11 +24,18 @@ export class TooltipDirective implements OnDestroy {
   @Input() appTooltipShortcut?: string;
   @Input() appTooltipShortcutId?: string;
   @Input() appTooltipPlacement: 'top' | 'bottom' | 'left' | 'right' = 'bottom';
+  @Input('tooltipPosition')
+  set tooltipPositionAlias(pos: 'top' | 'bottom' | 'left' | 'right' | undefined) {
+    if (pos) {
+      this.appTooltipPlacement = pos;
+    }
+  }
   @Input() appTooltipDelay: number = 150;
 
   private tooltipEl: HTMLElement | null = null;
   private currentTooltipId: string | null = null;
   private showTimeout: any = null;
+  private lastTouchTime = 0;
 
   constructor(
     el?: ElementRef,
@@ -66,8 +73,15 @@ export class TooltipDirective implements OnDestroy {
     }
   }
 
+  @HostListener('touchstart')
+  onTouchStart(): void {
+    this.lastTouchTime = Date.now();
+    this.hide();
+  }
+
   @HostListener('mouseenter')
   onMouseEnter(): void {
+    if (Date.now() - this.lastTouchTime < 800) return;
     this.scheduleShow();
   }
 
@@ -78,6 +92,7 @@ export class TooltipDirective implements OnDestroy {
 
   @HostListener('focusin')
   onFocusIn(): void {
+    if (Date.now() - this.lastTouchTime < 800) return;
     this.scheduleShow();
   }
 

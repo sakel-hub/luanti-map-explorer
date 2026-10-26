@@ -4,7 +4,9 @@ import {
   BiomePaletteMode,
   CustomBiomeSeedOverride,
   DecodedWorldDatabase,
+  DiscoveredWorldRegion,
   ExplorerExportBundle,
+  ExtrusionFilterMode,
   MapMarker,
   MapMarkerCategory,
   MapgenType,
@@ -13,6 +15,7 @@ import {
   VerticalSlicePresetId,
   ViewMode,
   WorldConfig,
+  WorldDatabaseBackend,
   WorldLoadProgress
 } from '../models/world.model';
 import { BiomeDefinition, ClimateSample } from '../models/biome.model';
@@ -39,6 +42,34 @@ const STORAGE_KEY_LAST_CONFIG = 'luanti_explorer_world_config_v1';
 const STORAGE_KEY_LAST_CAMERA = 'luanti_explorer_camera_v1';
 const STORAGE_KEY_LAST_VIEW_MODE = 'luanti_explorer_view_mode_v1';
 const STORAGE_KEY_IS_DEMO = 'luanti_explorer_is_demo_v1';
+export const STORAGE_KEY_USER_SETTINGS = 'luanti_explorer_user_settings_v1';
+
+export interface PersistedUserSettings {
+  terrain3dEnabled?: boolean;
+  terrainExaggeration?: number;
+  treeSpritesEnabled?: boolean;
+  buildingExtrusions3dEnabled?: boolean;
+  extrusionFilterMode?: ExtrusionFilterMode;
+  hypsometricMode?: boolean;
+  hillshadeEnabled?: boolean;
+  chunkGridEnabled?: boolean;
+  exploredBoundsEnabled?: boolean;
+  markersVisible?: boolean;
+  discoveredRegionsVisible?: boolean;
+}
+
+export interface ActiveMarkerPopupInfo {
+  marker?: MapMarker;
+  region?: DiscoveredWorldRegion;
+  title: string;
+  x: number;
+  z: number;
+  y?: number;
+  screenX: number;
+  screenY: number;
+  blockCount?: number;
+  dominantNode?: string;
+}
 
 export const MARKER_CATEGORY_COLORS: Record<MapMarkerCategory, string> = {
   base: '#10b981',
@@ -255,17 +286,30 @@ export class MapStore {
     caveMode: false
   });
 
-  // 3D Elevation & Layer Toggles
   public readonly terrain3dEnabled = signal<boolean>(false);
   public readonly terrainExaggeration = signal<number>(1.3);
+  public readonly buildingExtrusions3dEnabled = signal<boolean>(false);
+  public readonly extrusionFilterMode = signal<ExtrusionFilterMode>('off');
   public readonly hypsometricMode = signal<boolean>(false);
   public readonly hillshadeEnabled = signal<boolean>(true);
-  public readonly voronoiContoursEnabled = signal<boolean>(true);
+  public readonly voronoiContoursEnabled = signal<boolean>(false);
+  public readonly treeSpritesEnabled = signal<boolean>(true);
   public readonly chunkGridEnabled = signal<boolean>(true);
   public readonly exploredBoundsEnabled = signal<boolean>(true);
+  public readonly discoveredRegionsVisible = signal<boolean>(true);
+  public readonly activeMarkerPopup = signal<ActiveMarkerPopupInfo | null>(null);
 
-  // SQLite World Database State
+  // World Database State
   public readonly worldDatabase = signal<DecodedWorldDatabase | null>(null);
+  public readonly databaseBackend = computed<WorldDatabaseBackend | null>(() => {
+    const db = this.worldDatabase();
+    if (db?.databaseBackend) return db.databaseBackend;
+    const cfgBackend = this.worldConfig().backend?.toLowerCase();
+    if (cfgBackend === 'postgresql' || cfgBackend === 'pgsql') return 'postgresql';
+    if (cfgBackend === 'sqlite3' || cfgBackend === 'sqlite') return 'sqlite3';
+    if (db) return 'sqlite3';
+    return null;
+  });
   public readonly isLoadingWorld = signal<boolean>(false);
   public readonly loadStatusMessage = signal<string>('');
   public readonly loadProgress = signal<WorldLoadProgress | null>(null);
@@ -282,6 +326,7 @@ export class MapStore {
     bearing: 0
   });
   public readonly cameraJumpRequest = signal<{ x: number; z: number; zoom?: number; seq: number } | null>(null);
+  public readonly cameraOrientationRequest = signal<{ pitch: number; bearing: number; seq: number } | null>(null);
 
   // Live Synthesizer for instant cursor telemetry (< 0.05ms per mousemove)
   public readonly synthesizer = computed(() => {
@@ -439,12 +484,18 @@ export class MapStore {
         }
       }
 
-      // Restore camera state
+      // Restore camera state (clamp pitch & bearing to 0 when booting in 2D Flat mode)
       const rawCam = safeGetItem(STORAGE_KEY_LAST_CAMERA);
       if (rawCam) {
         const parsed = JSON.parse(rawCam);
         if (parsed && typeof parsed.x === 'number' && typeof parsed.z === 'number') {
-          this.cameraState.set(parsed);
+          this.cameraState.set({
+            x: parsed.x,
+            z: parsed.z,
+            zoom: typeof parsed.zoom === 'number' ? parsed.zoom : 6.4,
+            pitch: this.terrain3dEnabled() && typeof parsed.pitch === 'number' ? parsed.pitch : 0,
+            bearing: this.terrain3dEnabled() && typeof parsed.bearing === 'number' ? parsed.bearing : 0
+          });
         }
       }
 
@@ -462,8 +513,50 @@ export class MapStore {
           this.worldConfig.update(c => ({ ...c, ...parsed }));
         }
       }
+      // Load persisted explorer settings (toggles, 3d relief, models, markers, etc.)
+      this.loadUserSettingsFromStorage();
     } catch {
       // Ignore storage access errors
+    }
+  }
+
+  public saveUserSettingsToStorage(): void {
+    const settings: PersistedUserSettings = {
+      terrain3dEnabled: this.terrain3dEnabled(),
+      terrainExaggeration: this.terrainExaggeration(),
+      treeSpritesEnabled: this.treeSpritesEnabled(),
+      buildingExtrusions3dEnabled: this.buildingExtrusions3dEnabled(),
+      extrusionFilterMode: this.extrusionFilterMode(),
+      hypsometricMode: this.hypsometricMode(),
+      hillshadeEnabled: this.hillshadeEnabled(),
+      chunkGridEnabled: this.chunkGridEnabled(),
+      exploredBoundsEnabled: this.exploredBoundsEnabled(),
+      markersVisible: this.markersVisible(),
+      discoveredRegionsVisible: this.discoveredRegionsVisible()
+    };
+    safeSetItem(STORAGE_KEY_USER_SETTINGS, JSON.stringify(settings));
+  }
+
+  private loadUserSettingsFromStorage(): void {
+    const rawSettings = safeGetItem(STORAGE_KEY_USER_SETTINGS);
+    if (!rawSettings) return;
+    try {
+      const s: PersistedUserSettings = JSON.parse(rawSettings);
+      if (typeof s.terrain3dEnabled === 'boolean') this.terrain3dEnabled.set(s.terrain3dEnabled);
+      if (typeof s.terrainExaggeration === 'number') this.terrainExaggeration.set(s.terrainExaggeration);
+      if (typeof s.treeSpritesEnabled === 'boolean') this.treeSpritesEnabled.set(s.treeSpritesEnabled);
+      if (typeof s.buildingExtrusions3dEnabled === 'boolean') this.buildingExtrusions3dEnabled.set(s.buildingExtrusions3dEnabled);
+      if (s.extrusionFilterMode && ['all', 'pillars', 'structures', 'off'].includes(s.extrusionFilterMode)) {
+        this.extrusionFilterMode.set(s.extrusionFilterMode);
+      }
+      if (typeof s.hypsometricMode === 'boolean') this.hypsometricMode.set(s.hypsometricMode);
+      if (typeof s.hillshadeEnabled === 'boolean') this.hillshadeEnabled.set(s.hillshadeEnabled);
+      if (typeof s.chunkGridEnabled === 'boolean') this.chunkGridEnabled.set(s.chunkGridEnabled);
+      if (typeof s.exploredBoundsEnabled === 'boolean') this.exploredBoundsEnabled.set(s.exploredBoundsEnabled);
+      if (typeof s.markersVisible === 'boolean') this.markersVisible.set(s.markersVisible);
+      if (typeof s.discoveredRegionsVisible === 'boolean') this.discoveredRegionsVisible.set(s.discoveredRegionsVisible);
+    } catch {
+      // Ignore JSON parse errors
     }
   }
 
@@ -492,6 +585,9 @@ export class MapStore {
       const zParam = params.get('z');
       const zoomParam = params.get('zoom');
       const pitchParam = params.get('pitch');
+      const r3dParam = params.get('r3d');
+      const yMinParam = params.get('yMin');
+      const yMaxParam = params.get('yMax');
 
       if (seedParam && !isNaN(Number(seedParam))) {
         this.worldConfig.update(c => ({ ...c, seed: Number(seedParam) }));
@@ -502,16 +598,20 @@ export class MapStore {
       if (modeParam && ['seed', 'db', 'hybrid'].includes(modeParam)) {
         this.viewMode.set(modeParam);
       }
-      if (xParam !== null || zParam !== null || zoomParam !== null || pitchParam !== null) {
+      if (yMinParam !== null && yMaxParam !== null && !isNaN(Number(yMinParam)) && !isNaN(Number(yMaxParam))) {
+        this.setCustomVerticalSlice(Number(yMinParam), Number(yMaxParam));
+      }
+      if (xParam !== null || zParam !== null || zoomParam !== null || pitchParam !== null || r3dParam !== null) {
         const curr = this.cameraState();
         const x = xParam && !isNaN(Number(xParam)) ? Number(xParam) : curr.x;
         const z = zParam && !isNaN(Number(zParam)) ? Number(zParam) : curr.z;
         const zoom = zoomParam && !isNaN(Number(zoomParam)) ? Number(zoomParam) : curr.zoom;
-        const pitch = pitchParam && !isNaN(Number(pitchParam)) ? Number(pitchParam) : curr.pitch;
+        const is3d = r3dParam === '1' || (pitchParam !== null && Number(pitchParam) > 10);
+        const pitch = pitchParam && !isNaN(Number(pitchParam)) ? Number(pitchParam) : is3d ? 52 : curr.pitch;
 
-        this.cameraState.set({ x, z, zoom, pitch, bearing: pitch > 10 ? -18 : 0 });
+        this.cameraState.set({ x, z, zoom, pitch, bearing: is3d ? -28 : 0 });
         this.cursorPos.set({ x, z });
-        this.terrain3dEnabled.set(pitch > 10);
+        this.terrain3dEnabled.set(is3d);
       }
     } catch {
       // Ignore malformed query params
@@ -730,19 +830,82 @@ export class MapStore {
   public toggleTerrain3D(force?: boolean): void {
     const next = force !== undefined ? force : !this.terrain3dEnabled();
     this.terrain3dEnabled.set(next);
+    this.saveUserSettingsToStorage();
   }
 
   public setTerrainExaggeration(val: number): void {
     this.terrainExaggeration.set(val);
+    this.saveUserSettingsToStorage();
+  }
+
+  public setExaggeration(val: number): void {
+    this.setTerrainExaggeration(val);
+  }
+
+  public setPitch3D(pitch: number): void {
+    this.cameraState.update(c => ({ ...c, pitch }));
+    const curr = this.cameraState();
+    this.cameraOrientationRequest.set({
+      pitch: curr.pitch,
+      bearing: curr.bearing,
+      seq: Date.now() + Math.random()
+    });
+  }
+
+  public setBearing3D(bearing: number): void {
+    this.cameraState.update(c => ({ ...c, bearing }));
+    const curr = this.cameraState();
+    this.cameraOrientationRequest.set({
+      pitch: curr.pitch,
+      bearing: curr.bearing,
+      seq: Date.now() + Math.random()
+    });
+  }
+
+  public setBuildingExtrusions3dEnabled(val: boolean): void {
+    this.buildingExtrusions3dEnabled.set(val);
+    this.extrusionFilterMode.set(val ? 'all' : 'off');
+    this.saveUserSettingsToStorage();
+  }
+
+  public setExtrusionFilterMode(mode: ExtrusionFilterMode): void {
+    this.extrusionFilterMode.set(mode);
+    this.buildingExtrusions3dEnabled.set(mode !== 'off');
+    this.saveUserSettingsToStorage();
+  }
+
+  public cycleExtrusionFilterMode(): void {
+    const curr = this.extrusionFilterMode();
+    const next: ExtrusionFilterMode =
+      curr === 'all'
+        ? 'pillars'
+        : curr === 'pillars'
+          ? 'structures'
+          : curr === 'structures'
+            ? 'off'
+            : 'all';
+    this.setExtrusionFilterMode(next);
+  }
+
+  public toggleTreeSprites(): void {
+    this.treeSpritesEnabled.update(v => !v);
+    this.saveUserSettingsToStorage();
+  }
+
+  public setTreeSpritesEnabled(val: boolean): void {
+    this.treeSpritesEnabled.set(val);
+    this.saveUserSettingsToStorage();
   }
 
   public toggleHypsometricMode(): void {
     this.hypsometricMode.update(v => !v);
+    this.saveUserSettingsToStorage();
     this.bumpRevision();
   }
 
   public toggleHillshade(): void {
     this.hillshadeEnabled.update(v => !v);
+    this.saveUserSettingsToStorage();
     this.bumpRevision();
   }
 
@@ -753,11 +916,31 @@ export class MapStore {
 
   public toggleChunkGrid(): void {
     this.chunkGridEnabled.update(v => !v);
+    this.saveUserSettingsToStorage();
   }
 
   public toggleExploredBounds(): void {
     this.exploredBoundsEnabled.update(v => !v);
+    this.saveUserSettingsToStorage();
     this.bumpRevision();
+  }
+
+  public toggleDiscoveredRegionsVisible(): void {
+    this.discoveredRegionsVisible.update(v => !v);
+    this.saveUserSettingsToStorage();
+  }
+
+  public setDiscoveredRegionsVisible(val: boolean): void {
+    this.discoveredRegionsVisible.set(val);
+    this.saveUserSettingsToStorage();
+  }
+
+  public openMarkerPopup(info: ActiveMarkerPopupInfo): void {
+    this.activeMarkerPopup.set(info);
+  }
+
+  public closeMarkerPopup(): void {
+    this.activeMarkerPopup.set(null);
   }
 
   public toggleProfileAxis(): void {
@@ -829,6 +1012,7 @@ export class MapStore {
 
   public toggleMarkersVisible(): void {
     this.markersVisible.update(v => !v);
+    this.saveUserSettingsToStorage();
   }
 
   public addMarker(input: {
@@ -1021,15 +1205,20 @@ export class MapStore {
       .join('\n');
   }
 
-  public loadDemoDatabase(): void {
+  public loadDemoDatabase(backend: WorldDatabaseBackend = 'sqlite3'): void {
     safeSetItem(STORAGE_KEY_IS_DEMO, 'true');
     this.discoveredModBiomes.set([]);
     const demoDb = buildDemoWorldDatabase(this.worldConfig().seed, this.verticalSlice().presetId);
+    demoDb.databaseBackend = backend;
+    demoDb.fileName = backend === 'postgresql' ? 'demo-world/map.sql' : 'demo-world/map.sqlite';
     this.worldDatabase.set(demoDb);
     this.worldConfig.update(c => ({
       ...c,
-      worldName: 'Demo Citadel World',
+      worldName: backend === 'postgresql' ? 'Demo Citadel World (PostgreSQL)' : 'Demo Citadel World (SQLite)',
+      backend: backend === 'postgresql' ? 'postgresql' : 'sqlite3',
       hasSqliteDb: true,
+      hasDatabase: true,
+      databaseBackend: backend,
       blockCount: demoDb.totalBlocks
     }));
     if (this.viewMode() === 'seed') {
@@ -1051,6 +1240,8 @@ export class MapStore {
         ...curr,
         ...partialConfig,
         hasSqliteDb: !!db,
+        hasDatabase: !!db,
+        databaseBackend: db?.databaseBackend,
         blockCount: db ? db.totalBlocks : 0
       };
       if (!isDemo && updated.worldName) {

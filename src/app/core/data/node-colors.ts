@@ -137,8 +137,14 @@ export const LUANTI_NODE_COLORS: Record<string, [number, number, number]> = {
   'everness:icecobble': [152, 194, 246],
   'everness:mineral_cave_stone': [96, 148, 146],
   'everness:mineral_sand': [222, 201, 180],
+  'everness:mineral_sandstone': [218, 198, 176],
+  'everness:mineral_sandstone_block': [216, 196, 174],
+  'everness:mineral_sandstone_brick': [214, 194, 172],
   'everness:mineral_stone': [239, 234, 238],
+  'everness:mineral_stone_block': [226, 214, 198],
+  'everness:mineral_stone_brick': [222, 208, 192],
   'everness:mineral_stone_brick_with_growth': [197, 196, 135],
+  'everness:mineral_waters_under_rock': [196, 182, 168],
   'everness:mineral_water_flowing': [20, 209, 200],
   'everness:mineral_water_source': [20, 209, 200],
   'everness:palm_leaves': [68, 168, 62],
@@ -843,6 +849,9 @@ export function resolveNodeColor(nodeName: string): [number, number, number] {
   if (lower.includes('lava')) return [249, 115, 22];
 
   // Everness mod
+  if (lower.includes('mineral_stone') || lower.includes('mineral_sand') || lower.includes('mineral_waters')) {
+    return [222, 208, 192];
+  }
   if (lower.includes('cursed')) return [39, 76, 54];
   if (lower.includes('frosted')) return [169, 207, 248];
   if (lower.includes('forsaken_desert')) return [201, 140, 80];
@@ -851,8 +860,15 @@ export function resolveNodeColor(nodeName: string): [number, number, number] {
   if (lower.includes('coral_grass') || lower.includes('coral_leaves') || lower.includes('coral_bush')) {
     return [109, 50, 71];
   }
-  if (lower.includes('crystal_grass') || lower.includes('crystal_leaves') || lower.includes('crystal_megalith')) {
-    return [140, 96, 154];
+  if (
+    lower.includes('crystal_grass') ||
+    lower.includes('crystal_leaves') ||
+    lower.includes('crystal_megalith') ||
+    lower.includes('crystal_pillar') ||
+    lower.includes('crystal_block') ||
+    lower.includes('amethyst_crystal')
+  ) {
+    return [152, 112, 214];
   }
   if (lower.includes('bamboo')) return [74, 182, 68];
   if (lower.includes('lotus_flower')) return [244, 114, 182];

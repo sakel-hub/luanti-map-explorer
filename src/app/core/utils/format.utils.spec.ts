@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { formatDurationSeconds } from './format.utils';
+import { signal } from '@angular/core';
+import { copyWithSignalFeedback, formatDurationSeconds } from './format.utils';
 
 describe('formatDurationSeconds', () => {
   it('formats zero or negative durations', () => {
@@ -34,5 +35,13 @@ describe('formatDurationSeconds', () => {
     expect(formatDurationSeconds(12000)).toBe('3h 20m');
     // 14632s = 4h 3m
     expect(formatDurationSeconds(14632)).toBe('4h 3m');
+  });
+
+  it('sets and auto-resets feedback signal in copyWithSignalFeedback', async () => {
+    const state = signal(false);
+    copyWithSignalFeedback('/teleport 0 10 0', state, 30);
+    expect(state()).toBe(true);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(state()).toBe(false);
   });
 });

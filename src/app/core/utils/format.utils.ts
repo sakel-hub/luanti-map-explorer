@@ -1,6 +1,31 @@
+import { WritableSignal } from '@angular/core';
+
 /**
- * Formatting utilities for time durations, sizes, and telemetry values.
+ * Formatting utilities for time durations, sizes, clipboard actions, and telemetry values.
  */
+
+/**
+ * Copies text to clipboard and temporarily sets a boolean signal to true for UI feedback.
+ */
+export function copyWithSignalFeedback(
+  text: string,
+  stateSignal: WritableSignal<boolean>,
+  durationMs = 2000
+): void {
+  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      stateSignal.set(true);
+      setTimeout(() => stateSignal.set(false), durationMs);
+    }).catch(() => {
+      // Fallback if clipboard write rejects in restricted context
+      stateSignal.set(true);
+      setTimeout(() => stateSignal.set(false), durationMs);
+    });
+  } else {
+    stateSignal.set(true);
+    setTimeout(() => stateSignal.set(false), durationMs);
+  }
+}
 
 /**
  * Formats a duration in seconds into a clean, human-readable string.

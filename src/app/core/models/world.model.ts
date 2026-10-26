@@ -5,6 +5,7 @@ export type ViewMode = 'seed' | 'db' | 'hybrid';
 export type AltitudeBand = 'all' | 'ocean' | 'lowland' | 'highland' | 'underground';
 export type BiomePaletteMode = 'auto' | 'all' | 'vanilla' | 'everness' | 'ethereal' | 'mineclone';
 export type MapMarkerCategory = 'base' | 'portal' | 'dungeon' | 'resource' | 'poi';
+export type ExtrusionFilterMode = 'all' | 'pillars' | 'structures' | 'off';
 
 export interface MapMarker {
   id: string;
@@ -57,12 +58,14 @@ export interface VerticalSliceConfig {
 export interface VerticalLayerSummary {
   id: VerticalSlicePresetId;
   label: string;
-  description: string;
+  shortLabel?: string;
+  badge?: string;
+  description?: string;
   minY: number;
   maxY: number;
-  estimatedBlocks: number;
-  hotspotX: number;
-  hotspotZ: number;
+  estimatedBlocks?: number;
+  hotspotX?: number;
+  hotspotZ?: number;
   caveMode: boolean;
 }
 
@@ -88,6 +91,8 @@ export interface WorldConfig {
   humidityNoise: NoiseParams;
   terrainNoise: NoiseParams;
   hasSqliteDb: boolean;
+  hasDatabase?: boolean;
+  databaseBackend?: WorldDatabaseBackend;
   blockCount: number;
 }
 
@@ -111,6 +116,8 @@ export interface CompactBlockSurface {
   rgb: Uint8Array;
   /** 256 Int16 values: topY per (lz * 16 + lx), -32768 = empty */
   topY: Int16Array;
+  /** 256 Int16 values: bare ground or structural floor level (excluding tree/bamboo canopy spikes) for terrain-dem */
+  groundY?: Int16Array;
   /** 256 Uint8 values: waterDepth per (lz * 16 + lx) */
   waterDepth: Uint8Array;
   /** Representative / dominant node name in this 16x16 block */
@@ -118,8 +125,20 @@ export interface CompactBlockSurface {
   /** Precomputed average color & elevation for fast zoomed-out LOD rendering */
   avgColor: [number, number, number];
   avgY: number;
-  /** Number of surface columns containing player-crafted or structural nodes (bricks, wood, chests, lamps, etc.) */
+  /** Number of surface columns containing player-crafted, structural, or vertical pillar nodes */
   playerNodeCount?: number;
+  /** 256 Uint8 values: 0 = None, 1 = Structure, 2 = Bamboo/Cactus, 3 = Crystal Pillar */
+  extrusionKind?: Uint8Array;
+  /** Detected tree / flora anchor points */
+  treeAnchors?: TreeAnchorPoint[];
+}
+
+export interface TreeAnchorPoint {
+  lx: number;
+  lz: number;
+  y: number;
+  saplingKey: string;
+  scale?: number;
 }
 
 /**
@@ -151,8 +170,14 @@ export interface ParsedMapBlockSummary {
     localX: number;
     localZ: number;
     topLocalY: number;
+    groundLocalY?: number;
+    contiguousSpan?: number;
+    hasAirGapBelow?: boolean;
     nodeName: string;
     waterCount: number;
+    trunkNodeName?: string;
+    trunkLocalY?: number;
+    hasFoliage?: boolean;
   }>;
 }
 
@@ -163,6 +188,57 @@ export interface DiscoveredWorldRegion {
   centerZ: number;
   blockCount: number;
   kind: 'spawn' | 'hub' | 'base' | 'expedition';
+  avgY?: number;
+  dominantNode?: string;
+}
+
+export type WorldDatabaseBackend = 'sqlite3' | 'postgresql';
+
+export interface RawMapBlockRow {
+  x: number;
+  y: number;
+  z: number;
+  rowid?: number;
+  data: Uint8Array;
+}
+
+export interface DatabaseOverviewSummary {
+  backendType?: WorldDatabaseBackend;
+  hasXyzSchema: boolean;
+  estimatedTotalBlocks: number;
+  minBlockX: number;
+  maxBlockX: number;
+  minBlockZ: number;
+  maxBlockZ: number;
+  exploredBlockKeys: Set<string>;
+  discoveredRegions: DiscoveredWorldRegion[];
+  verticalLayers: VerticalLayerSummary[];
+  exploredMacroSectors: Array<{ mx: number; mz: number }>;
+  dividerSamples: Array<{ x: number; y: number; z: number; rowid: number }>;
+}
+
+export interface WorldDatabaseReader {
+  readonly backendType: WorldDatabaseBackend;
+  readonly fileName: string;
+  init(): Promise<void>;
+  scanOverviewAndVerticalLayers(
+    onProgress?: (progressUnits: number, samplesFound: number) => void
+  ): Promise<DatabaseOverviewSummary>;
+  queryBlocksInBounds(
+    minBx: number,
+    maxBx: number,
+    minBz: number,
+    maxBz: number,
+    minBy: number,
+    maxBy: number,
+    maxResults?: number,
+    stride?: number
+  ): Promise<RawMapBlockRow[]>;
+  fetchBlocksForKeys(
+    keys: Array<{ x: number; y: number; z: number; rowid?: number } | string>,
+    onProgress?: (current: number, total: number) => void
+  ): Promise<RawMapBlockRow[]>;
+  close(): void;
 }
 
 export interface DecodedWorldDatabase {
@@ -173,6 +249,8 @@ export interface DecodedWorldDatabase {
   maxBlockX: number;
   minBlockZ: number;
   maxBlockZ: number;
+  hasDatabase?: boolean;
+  databaseBackend?: WorldDatabaseBackend;
   /** Legacy / Demo column lookup */
   surfaceColumns: Map<string, ParsedColumnSurface>;
   /** Tier 1 & 2 High-Res LRU Cache: keyed by `${blockX},${blockZ}` -> Compact 16x16 TypedArray block */
@@ -197,6 +275,8 @@ export interface WorldLoadProgress {
   phase:
     | 'meta'
     | 'btree-scan'
+    | 'pg-scan'
+    | 'dump-scan'
     | 'global-overview'
     | 'spawn-sectors'
     | 'slice-reload'
@@ -207,7 +287,7 @@ export interface WorldLoadProgress {
   percent: number;
   current: number;
   total: number;
-  unit: 'pages' | 'blocks' | 'sectors';
+  unit: 'pages' | 'lines' | 'blocks' | 'sectors' | '%';
   blocksDecoded: number;
   elapsedSeconds: number;
   etaSeconds: number | null;

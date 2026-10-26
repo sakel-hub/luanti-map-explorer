@@ -18,6 +18,7 @@ export class KeyboardShortcutsService {
   private readonly mapStore = inject(MapStore, { optional: true });
 
   public readonly isShortcutsModalOpen = signal<boolean>(false);
+  public readonly lastTriggeredAction = signal<{ id: string; timestamp: number } | null>(null);
   public readonly isMac: boolean;
 
   public readonly shortcuts: ShortcutDefinition[] = [
@@ -57,6 +58,15 @@ export class KeyboardShortcutsService {
       macKey: '3',
       winKey: '3',
       keyDisplay: '3'
+    },
+    {
+      id: 'reset_north',
+      name: 'Reset 3D Camera & North',
+      description: 'Reset 3D tilt (52°), orbit (-28°), and vertical scale (1.3×)',
+      category: 'Map & Camera',
+      macKey: 'N',
+      winKey: 'N',
+      keyDisplay: 'N'
     },
     {
       id: 'view_grid',
@@ -113,7 +123,25 @@ export class KeyboardShortcutsService {
       winKey: 'L',
       keyDisplay: 'L'
     },
+    {
+      id: 'layer_trees',
+      name: 'Toggle 2.5D Tree Sprites',
+      description: 'Show or hide camera-facing billboard tree and flora sapling sprites',
+      category: 'Modes & Layers',
+      macKey: 'T',
+      winKey: 'T',
+      keyDisplay: 'T'
+    },
     // World & Seed
+    {
+      id: 'open_world',
+      name: 'Open World / map.sqlite',
+      description: 'Open a local Luanti map.sqlite database or world folder',
+      category: 'World & Seed',
+      macKey: 'O',
+      winKey: 'O',
+      keyDisplay: 'O'
+    },
     {
       id: 'seed_random',
       name: 'Randomize World Seed',
@@ -133,6 +161,24 @@ export class KeyboardShortcutsService {
       keyDisplay: 'Esc'
     },
     // General
+    {
+      id: 'open_routes',
+      name: 'Open Route Planner',
+      description: 'Switch sidebar to the 3D Voxel Route Planner',
+      category: 'General',
+      macKey: 'P',
+      winKey: 'P',
+      keyDisplay: 'P'
+    },
+    {
+      id: 'open_share',
+      name: 'Share Map & Seed Link',
+      description: 'Open the Share Map dialog with deep-link URL',
+      category: 'General',
+      macKey: 'S',
+      winKey: 'S',
+      keyDisplay: 'S'
+    },
     {
       id: 'help_shortcuts',
       name: 'Keyboard Shortcuts Cheat Sheet',
@@ -271,8 +317,35 @@ export class KeyboardShortcutsService {
       event.preventDefault();
       return true;
     }
+    if (keyLower === 't') {
+      this.mapStore?.toggleTreeSprites();
+      event.preventDefault();
+      return true;
+    }
     if (keyLower === 'r') {
       this.mapStore?.randomizeSeed();
+      event.preventDefault();
+      return true;
+    }
+    if (keyLower === 'n') {
+      this.mapStore?.setPitch3D(52);
+      this.mapStore?.setBearing3D(-28);
+      this.mapStore?.setExaggeration(1.3);
+      event.preventDefault();
+      return true;
+    }
+    if (keyLower === 'o') {
+      this.lastTriggeredAction.set({ id: 'open_world', timestamp: Date.now() });
+      event.preventDefault();
+      return true;
+    }
+    if (keyLower === 'p') {
+      this.lastTriggeredAction.set({ id: 'open_routes', timestamp: Date.now() });
+      event.preventDefault();
+      return true;
+    }
+    if (keyLower === 's') {
+      this.lastTriggeredAction.set({ id: 'open_share', timestamp: Date.now() });
       event.preventDefault();
       return true;
     }

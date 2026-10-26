@@ -49,9 +49,14 @@ addEventListener('message', ({ data }) => {
     const blockEntries: Array<[string, CompactBlockSurface]> = data.blockEntries || [];
     const mipmapEntries: Array<[string, MacroMipmapCell]> = data.mipmapEntries || [];
     const evictedKeys: string[] = data.evictedKeys || [];
+    const evictedMipKeys: string[] = data.evictedMipKeys || [];
 
     for (let i = 0; i < evictedKeys.length; i++) {
       cachedBlockSurfaces.delete(evictedKeys[i]);
+    }
+
+    for (let i = 0; i < evictedMipKeys.length; i++) {
+      cachedMacroMipmap.delete(evictedMipKeys[i]);
     }
 
     for (let i = 0; i < blockEntries.length; i++) {

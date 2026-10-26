@@ -8,13 +8,18 @@ import {
 } from '../models/world.model';
 import { BiomeDefinition } from '../models/biome.model';
 import { DEFAULT_LUANTI_BIOMES, resolveBiomeForDbNode } from '../data/default-biomes';
-import { resolveNodeNameFromExactColor } from './mapblock-parser';
-import { LuantiWorldSynthesizer, sampleMipmapClimateAnchor } from './perlin-noise';
+import {
+  EvaluatedTerrainPoint,
+  LuantiWorldSynthesizer,
+  sampleMipmapClimateAnchor
+} from './perlin-noise';
 import { encodeRgbaToPngBuffer } from './png-encoder';
+import { resolveNodeNameFromExactColor } from './mapblock-parser';
 
 export interface TileRenderJobPayload {
   jobId: number;
   zoom?: number;
+  cameraZoom?: number;
   tileKind: 'color' | 'terrain-dem';
   tileSize: number;
   minX: number;
@@ -91,6 +96,7 @@ interface SampledDbPixel {
   g: number;
   b: number;
   topY: number;
+  groundY?: number;
   waterDepth: number;
   nodeName: string;
 }
@@ -105,24 +111,28 @@ function sampleDbHierarchy(
   stepX: number,
   blockSurfaces: Map<string, CompactBlockSurface> | null | undefined,
   macroMipmap: Map<string, MacroMipmapCell> | null | undefined,
-  dbColumns: Map<string, ParsedColumnSurface> | null | undefined
+  dbColumns: Map<string, ParsedColumnSurface> | null | undefined,
+  cameraZoom?: number
 ): SampledDbPixel | null {
   const bx = worldX >> 4;
   const bz = worldZ >> 4;
+
+  const isMacroTier = (cameraZoom !== undefined && cameraZoom < 6.0) || stepX >= 4.0;
 
   // 1. Check Tier 1 & 2 Compact 16x16 Block Surface Cache (O(1) TypedArray lookup)
   if (blockSurfaces && blockSurfaces.size > 0) {
     const blk = blockSurfaces.get(`${bx},${bz}`);
     if (blk) {
-      // When viewing in World 4x4, Region 2x2, or Sector 1x1 (camera zoom < 6.0, tile z <= 7, stepX >= 4.0),
+      // When viewing in World 4x4, Region 2x2, or Sector 1x1 (camera zoom < 6.0, or stepX >= 4.0),
       // use precomputed 1x1 MapBlock average so the entire viewport renders at uniform block resolution!
-      if (stepX >= 4.0 && blk.avgY > -32768) {
+      if (isMacroTier && blk.avgY > -32768) {
         const exactMip = macroMipmap?.get(`b:${bx},${bz}`);
         return {
           r: blk.avgColor[0],
           g: blk.avgColor[1],
           b: blk.avgColor[2],
           topY: blk.avgY,
+          groundY: blk.avgY,
           waterDepth: exactMip ? exactMip.waterDepth : blk.waterDepth[((worldZ & 15) << 4) | (worldX & 15)],
           nodeName: blk.dominantNode
         };
@@ -133,11 +143,14 @@ function sampleDbHierarchy(
       const y = blk.topY[cellIdx];
       if (y > -32768) {
         const cOff = cellIdx * 3;
+        const groundY =
+          blk.groundY && blk.groundY[cellIdx] > -32768 ? blk.groundY[cellIdx] : blk.avgY;
         return {
           r: blk.rgb[cOff],
           g: blk.rgb[cOff + 1],
           b: blk.rgb[cOff + 2],
           topY: y,
+          groundY,
           waterDepth: blk.waterDepth[cellIdx],
           nodeName: blk.dominantNode
         };
@@ -165,13 +178,15 @@ function sampleDbHierarchy(
       };
     }
 
-    const siblingDecodedInHighRes =
-      stepX < 2.0 &&
-      (blockSurfaces?.has(`${bx ^ 1},${bz}`) ||
-        blockSurfaces?.has(`${bx},${bz ^ 1}`) ||
-        blockSurfaces?.has(`${bx ^ 1},${bz ^ 1}`));
+    const sibling1x1Decoded =
+      blockSurfaces?.has(`${bx ^ 1},${bz}`) ||
+      blockSurfaces?.has(`${bx},${bz ^ 1}`) ||
+      blockSurfaces?.has(`${bx ^ 1},${bz ^ 1}`) ||
+      macroMipmap.has(`b:${bx ^ 1},${bz}`) ||
+      macroMipmap.has(`b:${bx},${bz ^ 1}`) ||
+      macroMipmap.has(`b:${bx ^ 1},${bz ^ 1}`);
 
-    if (!siblingDecodedInHighRes) {
+    if (!sibling1x1Decoded) {
       const coarseMip = macroMipmap.get(`${bx >> 1},${bz >> 1}`);
       if (coarseMip) {
         return {
@@ -184,18 +199,40 @@ function sampleDbHierarchy(
         };
       }
 
-      // Fallback to 4x4 MapBlock (64x64 node) mipmap cell whenever the 2x2 quadrant is not yet decoded
-      // (prevents 1-in-4 polka-dot checkerboard gaps when zooming in before stride=2/1 refinement completes!)
+      // Fallback to 4x4 MapBlock (64x64 node) mipmap cell only when no 2x2 or 1x1 block
+      // inside this 4x4 group has already been decoded at a finer resolution
       const m4Mip = macroMipmap.get(`m4:${bx >> 2},${bz >> 2}`);
       if (m4Mip) {
-        return {
-          r: m4Mip.r,
-          g: m4Mip.g,
-          b: m4Mip.b,
-          topY: m4Mip.y,
-          waterDepth: m4Mip.waterDepth,
-          nodeName: m4Mip.nodeName
-        };
+        const mcx = bx >> 1;
+        const mcz = bz >> 1;
+        let finerIn4x4 =
+          macroMipmap.has(`${mcx ^ 1},${mcz}`) ||
+          macroMipmap.has(`${mcx},${mcz ^ 1}`) ||
+          macroMipmap.has(`${mcx ^ 1},${mcz ^ 1}`);
+        if (!finerIn4x4) {
+          const base4x = bx & ~3;
+          const base4z = bz & ~3;
+          for (let dz = 0; dz < 4 && !finerIn4x4; dz++) {
+            for (let dx = 0; dx < 4; dx++) {
+              const sbx = base4x + dx;
+              const sbz = base4z + dz;
+              if (blockSurfaces?.has(`${sbx},${sbz}`) || macroMipmap.has(`b:${sbx},${sbz}`)) {
+                finerIn4x4 = true;
+                break;
+              }
+            }
+          }
+        }
+        if (!finerIn4x4) {
+          return {
+            r: m4Mip.r,
+            g: m4Mip.g,
+            b: m4Mip.b,
+            topY: m4Mip.y,
+            waterDepth: m4Mip.waterDepth,
+            nodeName: m4Mip.nodeName
+          };
+        }
       }
     }
   }
@@ -265,47 +302,172 @@ export function renderTilePngBuffer(
   const sliceMaxY = job.sliceMaxY ?? 240;
   const isNonSurfaceSlice = sliceMinY >= 200 || sliceMaxY < 0 || !!job.caveMode;
 
+  // Precompute a compact 5x5 per-tile SQLite Climate & Coastal Elevation Anchor Grid in Hybrid mode
+  // so unexplored background biomes and 3D DEM terrain seamlessly match adjacent explored SQLite blocks.
+  const GRID_N = 5;
+  const activeBiomes = job.customBiomes || DEFAULT_LUANTI_BIOMES;
+  let anchorHeatGrid: Float32Array | null = null;
+  let anchorHumGrid: Float32Array | null = null;
+  let anchorBlendGrid: Float32Array | null = null;
+  let anchorElevGrid: Float32Array | null = null;
+  let anchorElevBlendGrid: Float32Array | null = null;
+
+  if (
+    job.viewMode === 'hybrid' &&
+    !isNonSurfaceSlice &&
+    ((macroMipmap && macroMipmap.size > 0) || (blockSurfaces && blockSurfaces.size > 0))
+  ) {
+    anchorHeatGrid = new Float32Array(GRID_N * GRID_N);
+    anchorHumGrid = new Float32Array(GRID_N * GRID_N);
+    anchorBlendGrid = new Float32Array(GRID_N * GRID_N);
+    anchorElevGrid = new Float32Array(GRID_N * GRID_N);
+    anchorElevBlendGrid = new Float32Array(GRID_N * GRID_N);
+
+    for (let gy = 0; gy < GRID_N; gy++) {
+      const gz = Math.floor(job.maxZ - (gy / (GRID_N - 1)) * spanZ);
+      for (let gx = 0; gx < GRID_N; gx++) {
+        const gwX = Math.floor(job.minX + (gx / (GRID_N - 1)) * spanX);
+        const gIdx = gy * GRID_N + gx;
+        const anchor = sampleMipmapClimateAnchor(
+          gwX,
+          gz,
+          macroMipmap,
+          activeBiomes,
+          blockSurfaces,
+          job.waterLevel
+        );
+        if (anchor) {
+          anchorHeatGrid[gIdx] = anchor.heat;
+          anchorHumGrid[gIdx] = anchor.humidity;
+          anchorBlendGrid[gIdx] = anchor.blend;
+          anchorElevGrid[gIdx] = anchor.elev;
+          anchorElevBlendGrid[gIdx] = anchor.elevBlend;
+        } else {
+          anchorHeatGrid[gIdx] = 50;
+          anchorHumGrid[gIdx] = 50;
+          anchorBlendGrid[gIdx] = 0;
+          anchorElevGrid[gIdx] = job.waterLevel;
+          anchorElevBlendGrid[gIdx] = 0;
+        }
+      }
+    }
+  }
+
   if (job.tileKind === 'terrain-dem') {
     const METERS_PER_NODE = 520;
-
-    const sampleElev = (wx: number, wz: number): number => {
-      const rx = Math.floor(wx);
-      const rz = Math.floor(wz);
-      const dbSample = sampleDbHierarchy(rx, rz, stepX, blockSurfaces, macroMipmap, dbColumns);
-
-      if (isNonSurfaceSlice && job.viewMode !== 'seed') {
-        if (dbSample) {
-          return Math.max(0, Math.min(180, dbSample.topY - sliceMinY));
-        }
-        return 0;
-      }
-      if (dbSample && (job.viewMode === 'db' || job.viewMode === 'hybrid')) {
-        return Math.max(job.waterLevel, dbSample.topY);
-      }
-      if (job.viewMode === 'db') {
-        return job.waterLevel;
-      }
-      return Math.max(job.waterLevel, synth.evaluateElevation(rx, rz));
-    };
-
     const baseLevel = isNonSurfaceSlice && job.viewMode !== 'seed' ? 0 : job.waterLevel;
+    const rawElevGrid = new Float32Array(size * size);
 
+    // 1. Single-pass elevation evaluation per pixel (with sub-voxel horizontal reuse when stepX < 1.0)
     for (let py = 0; py < size; py++) {
       const wz = job.maxZ - (py + 0.5) * stepZ;
+      const rz = Math.floor(wz);
+      const rowOffset = py * size;
+
+      const gyFloat = (py / Math.max(1, size - 1)) * (GRID_N - 1);
+      const gy0 = Math.min(GRID_N - 2, Math.floor(gyFloat));
+      const ty = gyFloat - gy0;
+
+      let prevRx = -9999999;
+      let prevElev = baseLevel;
+
       for (let px = 0; px < size; px++) {
         const wx = job.minX + (px + 0.5) * stepX;
+        const rx = Math.floor(wx);
 
-        // Avoid 5-tap cross filter when zoomed in close (stepX < 1) or zoomed out to pre-averaged mipmaps (stepX >= 16)
-        let smoothElev: number;
-        if (stepX < 1.0 || stepX >= 16.0) {
-          smoothElev = sampleElev(wx, wz);
+        if (stepX < 1.0 && rx === prevRx) {
+          rawElevGrid[rowOffset + px] = prevElev;
+          continue;
+        }
+        prevRx = rx;
+
+        const dbSample = sampleDbHierarchy(
+          rx,
+          rz,
+          stepX,
+          blockSurfaces,
+          macroMipmap,
+          dbColumns,
+          job.cameraZoom
+        );
+
+        let elev: number;
+        if (isNonSurfaceSlice && job.viewMode !== 'seed') {
+          if (dbSample) {
+            const rawDbElev = dbSample.groundY !== undefined ? dbSample.groundY : dbSample.topY;
+            elev = Math.max(0, Math.min(180, rawDbElev - sliceMinY));
+          } else {
+            elev = 0;
+          }
+        } else if (dbSample && (job.viewMode === 'db' || job.viewMode === 'hybrid')) {
+          const rawDbElev = dbSample.groundY !== undefined ? dbSample.groundY : dbSample.topY;
+          elev = Math.max(job.waterLevel, rawDbElev);
+        } else if (job.viewMode === 'db') {
+          elev = job.waterLevel;
         } else {
-          const c = sampleElev(wx, wz);
-          const l = sampleElev(wx - stepX * 0.5, wz);
-          const rgt = sampleElev(wx + stepX * 0.5, wz);
-          const u = sampleElev(wx, wz + stepZ * 0.5);
-          const d = sampleElev(wx, wz - stepZ * 0.5);
-          smoothElev = c * 0.4 + (l + rgt + u + d) * 0.15;
+          const rawSynthElev = Math.max(job.waterLevel, synth.evaluateElevation(rx, rz));
+          if (anchorElevGrid && anchorElevBlendGrid) {
+            const gxFloat = (px / Math.max(1, size - 1)) * (GRID_N - 1);
+            const gx0 = Math.min(GRID_N - 2, Math.floor(gxFloat));
+            const tx = gxFloat - gx0;
+
+            const i00 = gy0 * GRID_N + gx0;
+            const i10 = i00 + 1;
+            const i01 = i00 + GRID_N;
+            const i11 = i01 + 1;
+
+            const w00 = (1 - tx) * (1 - ty);
+            const w10 = tx * (1 - ty);
+            const w01 = (1 - tx) * ty;
+            const w11 = tx * ty;
+
+            const aElevBlend =
+              anchorElevBlendGrid[i00] * w00 +
+              anchorElevBlendGrid[i10] * w10 +
+              anchorElevBlendGrid[i01] * w01 +
+              anchorElevBlendGrid[i11] * w11;
+
+            if (aElevBlend > 0.01) {
+              const aElev =
+                anchorElevGrid[i00] * w00 +
+                anchorElevGrid[i10] * w10 +
+                anchorElevGrid[i01] * w01 +
+                anchorElevGrid[i11] * w11;
+              elev = Math.max(job.waterLevel, aElev) * aElevBlend + rawSynthElev * (1 - aElevBlend);
+            } else {
+              elev = rawSynthElev;
+            }
+          } else {
+            elev = rawSynthElev;
+          }
+        }
+
+        prevElev = elev;
+        rawElevGrid[rowOffset + px] = elev;
+      }
+    }
+
+    // 2. Fast in-memory 5-tap cross smoothing and Terrain-RGB encoding (zero extra Perlin/DB evaluations)
+    const isMacroDemTier = (job.cameraZoom !== undefined && job.cameraZoom < 6.0) || stepX >= 4.0;
+    const isSmoothTier = isMacroDemTier || (stepX >= 1.0 && stepX < 32.0);
+    const tapDist = isMacroDemTier
+      ? Math.max(1, Math.min(8, Math.round(12 / Math.max(0.5, stepX))))
+      : 1;
+
+    for (let py = 0; py < size; py++) {
+      const rowOffset = py * size;
+      const upRowOffset = Math.max(0, py - tapDist) * size;
+      const downRowOffset = Math.min(size - 1, py + tapDist) * size;
+
+      for (let px = 0; px < size; px++) {
+        const c = rawElevGrid[rowOffset + px];
+        let smoothElev = c;
+        if (isSmoothTier && (isMacroDemTier || stepX >= 1.0)) {
+          const l = rawElevGrid[rowOffset + Math.max(0, px - tapDist)];
+          const rgt = rawElevGrid[rowOffset + Math.min(size - 1, px + tapDist)];
+          const u = rawElevGrid[upRowOffset + px];
+          const d = rawElevGrid[downRowOffset + px];
+          smoothElev = c * 0.36 + (l + rgt + u + d) * 0.16;
         }
 
         const relativeHeight = Math.max(0, smoothElev - baseLevel);
@@ -316,7 +478,7 @@ export function renderTilePngBuffer(
         const g = (encoded >> 8) & 0xff;
         const b = encoded & 0xff;
 
-        const idx = (py * size + px) * 4;
+        const idx = (rowOffset + px) * 4;
         rgba[idx] = r;
         rgba[idx + 1] = g;
         rgba[idx + 2] = b;
@@ -329,39 +491,12 @@ export function renderTilePngBuffer(
   // Color Map Tile ('seed', 'db', or 'hybrid')
   const sampleStep = Math.max(1, Math.round(stepX));
   const macroStep = Math.max(3, Math.round(stepX * 3));
-  const isCloseUpVoxelZoom = stepX <= 0.35; // 1 Luanti node >= 3 tile pixels wide
+  const isMacroColorTier = (job.cameraZoom !== undefined && job.cameraZoom < 6.0) || stepX >= 4.0;
+  const dbSampleStep = isMacroColorTier ? Math.max(16, sampleStep) : sampleStep;
+  const isCloseUpVoxelZoom = (job.cameraZoom === undefined || job.cameraZoom >= 6.0) && stepX <= 0.35; // 1 Luanti node >= 3 tile pixels wide
 
-  // Precompute a 9x9 per-tile SQLite Climate Anchor Grid in Hybrid mode so unexplored background
-  // biomes seamlessly match the adjacent explored SQLite terrain without per-pixel mipmap scans.
-  const GRID_N = 9;
-  const activeBiomes = job.customBiomes || DEFAULT_LUANTI_BIOMES;
-  let anchorHeatGrid: Float32Array | null = null;
-  let anchorHumGrid: Float32Array | null = null;
-  let anchorBlendGrid: Float32Array | null = null;
-
-  if (job.viewMode === 'hybrid' && !isNonSurfaceSlice && macroMipmap && macroMipmap.size > 0) {
-    anchorHeatGrid = new Float32Array(GRID_N * GRID_N);
-    anchorHumGrid = new Float32Array(GRID_N * GRID_N);
-    anchorBlendGrid = new Float32Array(GRID_N * GRID_N);
-
-    for (let gy = 0; gy < GRID_N; gy++) {
-      const gz = Math.floor(job.maxZ - (gy / (GRID_N - 1)) * spanZ);
-      for (let gx = 0; gx < GRID_N; gx++) {
-        const gwX = Math.floor(job.minX + (gx / (GRID_N - 1)) * spanX);
-        const gIdx = gy * GRID_N + gx;
-        const anchor = sampleMipmapClimateAnchor(gwX, gz, macroMipmap, activeBiomes);
-        if (anchor) {
-          anchorHeatGrid[gIdx] = anchor.heat;
-          anchorHumGrid[gIdx] = anchor.humidity;
-          anchorBlendGrid[gIdx] = anchor.blend;
-        } else {
-          anchorHeatGrid[gIdx] = 50;
-          anchorHumGrid[gIdx] = 50;
-          anchorBlendGrid[gIdx] = 0;
-        }
-      }
-    }
-  }
+  let prevRowElev = new Int16Array(size);
+  let currRowElev = new Int16Array(size);
 
   for (let py = 0; py < size; py++) {
     const exactZ = job.maxZ - (py + 0.5) * stepZ;
@@ -372,6 +507,14 @@ export function renderTilePngBuffer(
     const gyFloat = (py / Math.max(1, size - 1)) * (GRID_N - 1);
     const gy0 = Math.min(GRID_N - 2, Math.floor(gyFloat));
     const ty = gyFloat - gy0;
+
+    let prevEvalWorldX = -9999999;
+    let prevEvalWorldZ = -9999999;
+    let prevEvalPt: EvaluatedTerrainPoint | null = null;
+    let prevEvalShade = 0;
+    let prevWaterCellX = -9999999;
+    let prevWaterCellZ = -9999999;
+    let prevWaterPt: EvaluatedTerrainPoint | null = null;
 
     for (let px = 0; px < size; px++) {
       const exactX = job.minX + (px + 0.5) * stepX;
@@ -386,7 +529,8 @@ export function renderTilePngBuffer(
         stepX,
         blockSurfaces,
         macroMipmap,
-        dbColumns
+        dbColumns,
+        job.cameraZoom
       );
 
       // 1. Pure DB Mode when pixel is outside decoded SQLite blocks/mipmaps
@@ -406,19 +550,133 @@ export function renderTilePngBuffer(
           ? elevationToHypsometricRgb(dbSample.topY, refBaseY)
           : [dbSample.r, dbSample.g, dbSample.b];
 
-        // Coastal lagoon vs deep water shading
+        let trackedDbElev = dbSample.topY;
+
+        // Rich Bathymetric Ocean Shading, Biome Tinting & Underwater Contours for SQLite Water
         if (!job.hypsometricMode && dbSample.waterDepth > 0) {
-          if (dbSample.waterDepth <= 2) {
-            r = Math.min(255, r + 22);
-            g = Math.min(255, g + 48);
-            b = Math.min(255, b + 18);
-          } else if (dbSample.waterDepth <= 5) {
-            r = Math.min(255, r + 10);
-            g = Math.min(255, g + 22);
-          } else if (dbSample.waterDepth >= 10) {
-            r = Math.max(0, r - 12);
-            g = Math.max(0, g - 24);
-            b = Math.max(0, b - 20);
+          let aHeat = 50;
+          let aHum = 50;
+          let aBlend = 0;
+          if (anchorHeatGrid && anchorHumGrid && anchorBlendGrid) {
+            const gxFloat = (px / Math.max(1, size - 1)) * (GRID_N - 1);
+            const gx0 = Math.min(GRID_N - 2, Math.floor(gxFloat));
+            const tx = gxFloat - gx0;
+
+            const i00 = gy0 * GRID_N + gx0;
+            const i10 = i00 + 1;
+            const i01 = i00 + GRID_N;
+            const i11 = i01 + 1;
+
+            const w00 = (1 - tx) * (1 - ty);
+            const w10 = tx * (1 - ty);
+            const w01 = (1 - tx) * ty;
+            const w11 = tx * ty;
+
+            const rawBlend =
+              anchorBlendGrid[i00] * w00 +
+              anchorBlendGrid[i10] * w10 +
+              anchorBlendGrid[i01] * w01 +
+              anchorBlendGrid[i11] * w11;
+            aBlend = job.isolatedBiomeId ? rawBlend * 0.25 : rawBlend;
+            if (aBlend > 0.01) {
+              aHeat =
+                anchorHeatGrid[i00] * w00 +
+                anchorHeatGrid[i10] * w10 +
+                anchorHeatGrid[i01] * w01 +
+                anchorHeatGrid[i11] * w11;
+              aHum =
+                anchorHumGrid[i00] * w00 +
+                anchorHumGrid[i10] * w10 +
+                anchorHumGrid[i01] * w01 +
+                anchorHumGrid[i11] * w11;
+            }
+          }
+
+          const waterShift = isMacroColorTier ? 2 : 1;
+          const wCellX = worldX >> waterShift;
+          const wCellZ = worldZ >> waterShift;
+          let oceanPt: EvaluatedTerrainPoint;
+          if (prevWaterPt && wCellX === prevWaterCellX && wCellZ === prevWaterCellZ) {
+            oceanPt = prevWaterPt;
+          } else {
+            oceanPt =
+              aBlend > 0.01
+                ? synth.evaluatePointWithClimateAnchor(
+                    worldX,
+                    worldZ,
+                    aHeat,
+                    aHum,
+                    aBlend,
+                    -8,
+                    job.voronoiContoursEnabled
+                  )
+                : synth.evaluatePoint(worldX, worldZ, -8, job.voronoiContoursEnabled);
+            prevWaterCellX = wCellX;
+            prevWaterCellZ = wCellZ;
+            prevWaterPt = oceanPt;
+          }
+          trackedDbElev = oceanPt.elevation;
+
+          const sqlDepth =
+            dbSample.groundY !== undefined && dbSample.groundY < dbSample.topY
+              ? Math.max(dbSample.waterDepth, dbSample.topY - dbSample.groundY)
+              : dbSample.waterDepth;
+          const procDepth = Math.max(2, Math.min(35, Math.round(job.waterLevel - oceanPt.elevation + 8)));
+          const effDepth =
+            sqlDepth <= 1
+              ? 1
+              : sqlDepth > 2
+                ? Math.round(sqlDepth * 0.55 + procDepth * 0.45)
+                : procDepth;
+
+          // Blend cerulean water base with local Voronoi ocean biome color
+          const [br, bg, bb] = oceanPt.biome.color;
+          r = Math.round(dbSample.r * 0.52 + br * 0.48);
+          g = Math.round(dbSample.g * 0.52 + bg * 0.48);
+          b = Math.round(dbSample.b * 0.52 + bb * 0.48);
+
+          if (effDepth <= 1) {
+            r = Math.min(255, r + 26);
+            g = Math.min(255, g + 52);
+            b = Math.min(255, b + 22);
+          } else if (effDepth === 2) {
+            r = Math.min(255, r + 12);
+            g = Math.min(255, g + 26);
+            b = Math.min(255, b + 10);
+          } else {
+            const band = Math.floor(effDepth / 3);
+            const drop = Math.min(68, (effDepth - 2) * 2.5 + band * 4);
+            r = Math.max(10, r - Math.round(drop * 0.68));
+            g = Math.max(22, g - Math.round(drop * 0.88));
+            b = Math.max(48, b - Math.round(drop * 0.6));
+          }
+
+          if (job.hillshadeEnabled && effDepth >= 2) {
+            const nwElev =
+              stepX >= 1.0 && py > 0 && px > 0
+                ? prevRowElev[px - 1]
+                : synth.evaluateElevation(worldX - sampleStep, worldZ + sampleStep);
+            const bathySlope = (oceanPt.elevation - nwElev) / Math.max(1, sampleStep * 0.42);
+            const bathyShade = Math.max(-24, Math.min(24, Math.round(bathySlope * 10)));
+            r = Math.max(0, Math.min(255, r + bathyShade));
+            g = Math.max(0, Math.min(255, g + bathyShade));
+            b = Math.max(0, Math.min(255, b + Math.round(bathyShade * 0.88)));
+
+            if (effDepth % 8 === 0) {
+              r = Math.round(r * 0.82);
+              g = Math.round(g * 0.82);
+              b = Math.round(b * 0.84);
+            } else if (effDepth % 4 === 0) {
+              r = Math.round(r * 0.91);
+              g = Math.round(g * 0.91);
+              b = Math.round(b * 0.92);
+            }
+          }
+
+          if (job.voronoiContoursEnabled && oceanPt.isVoronoiBorder) {
+            r = Math.round(r * 0.58 + 15);
+            g = Math.round(g * 0.58 + 23);
+            b = Math.round(b * 0.58 + 42);
           }
         }
 
@@ -437,30 +695,36 @@ export function renderTilePngBuffer(
         // Multi-Radius 3D Voxel Relief, Canopy AO & Warm/Cool Directional Sun Shading
         if (job.hillshadeEnabled && dbSample.waterDepth === 0) {
           const nw1 = sampleDbHierarchy(
-            worldX - sampleStep,
-            worldZ + sampleStep,
+            worldX - dbSampleStep,
+            worldZ + dbSampleStep,
             stepX,
             blockSurfaces,
             macroMipmap,
-            dbColumns
+            dbColumns,
+            job.cameraZoom
           );
           const se1 = sampleDbHierarchy(
-            worldX + sampleStep,
-            worldZ - sampleStep,
+            worldX + dbSampleStep,
+            worldZ - dbSampleStep,
             stepX,
             blockSurfaces,
             macroMipmap,
-            dbColumns
+            dbColumns,
+            job.cameraZoom
           );
 
           const yC = dbSample.topY;
           const yNW1 = nw1 ? nw1.topY : yC;
           const ySE1 = se1 ? se1.topY : yC;
 
-          if (stepX >= 16.0) {
-            // Fast 2-tap directional sun shading when zoomed out to whole-world / macro overview
-            const coarseSlope = (yC - yNW1) * 0.65 + (ySE1 - yC) * 0.45;
-            const shade = Math.max(-42, Math.min(40, Math.round(coarseSlope * 9.5)));
+          if (isMacroColorTier || stepX >= 16.0) {
+            // Fast 2-tap block-strided directional sun shading + gentle intra-block sub-node gradient
+            // so Sector 1x1 / Region 2x2 / World 4x4 render with smooth 3D terrain shading across 16x16 blocks!
+            const u = ((worldX & 15) - 7.5) / 16;
+            const v = (7.5 - (worldZ & 15)) / 16;
+            const subBlockGrad = (u + v) * (yNW1 - ySE1) * 0.1;
+            const coarseSlope = (yC - yNW1) * 0.65 + (ySE1 - yC) * 0.45 + subBlockGrad;
+            const shade = Math.max(-42, Math.min(40, Math.round(coarseSlope * 6.0)));
             if (shade >= 0) {
               r = Math.min(255, r + Math.round(shade * 1.1));
               g = Math.min(255, g + Math.round(shade * 1.02));
@@ -477,7 +741,8 @@ export function renderTilePngBuffer(
               stepX,
               blockSurfaces,
               macroMipmap,
-              dbColumns
+              dbColumns,
+              job.cameraZoom
             );
             const sw1 = sampleDbHierarchy(
               worldX - sampleStep,
@@ -485,7 +750,8 @@ export function renderTilePngBuffer(
               stepX,
               blockSurfaces,
               macroMipmap,
-              dbColumns
+              dbColumns,
+              job.cameraZoom
             );
             const nw2 = sampleDbHierarchy(
               worldX - macroStep,
@@ -493,7 +759,8 @@ export function renderTilePngBuffer(
               stepX,
               blockSurfaces,
               macroMipmap,
-              dbColumns
+              dbColumns,
+              job.cameraZoom
             );
             const se2 = sampleDbHierarchy(
               worldX + macroStep,
@@ -501,7 +768,8 @@ export function renderTilePngBuffer(
               stepX,
               blockSurfaces,
               macroMipmap,
-              dbColumns
+              dbColumns,
+              job.cameraZoom
             );
 
             const yNE1 = ne1 ? ne1.topY : yC;
@@ -579,8 +847,15 @@ export function renderTilePngBuffer(
           const localZ = worldZ & 15;
           if (localX === 0 || localX === 15 || localZ === 0 || localZ === 15) {
             const hasBlk = (bxTest: number, bzTest: number) =>
-              blockSurfaces?.has(`${bxTest},${bzTest}`) ||
-              exploredBlocks?.has(`${bxTest},${bzTest}`);
+              sampleDbHierarchy(
+                bxTest << 4,
+                bzTest << 4,
+                stepX,
+                blockSurfaces,
+                macroMipmap,
+                dbColumns,
+                job.cameraZoom
+              ) !== null || !!exploredBlocks?.has(`${bxTest},${bzTest}`);
             const isOuterEdge =
               (localX === 0 && !hasBlk(blockX - 1, blockZ)) ||
               (localX === 15 && !hasBlk(blockX + 1, blockZ)) ||
@@ -594,6 +869,7 @@ export function renderTilePngBuffer(
           }
         }
 
+        currRowElev[px] = trackedDbElev;
         rgba[idx] = r;
         rgba[idx + 1] = g;
         rgba[idx + 2] = b;
@@ -603,8 +879,19 @@ export function renderTilePngBuffer(
 
       // 3. Seed Biome Mode (or SQLite-anchored unexplored background in Hybrid Mode)
       const refSliceY = sliceMaxY < -200 ? sliceMaxY : undefined;
-      let pt;
-      if (anchorHeatGrid && anchorHumGrid && anchorBlendGrid) {
+      let pt: EvaluatedTerrainPoint;
+      const reusedSameWorldCoord =
+        stepX < 1.0 && worldX === prevEvalWorldX && worldZ === prevEvalWorldZ && prevEvalPt !== null;
+
+      if (reusedSameWorldCoord) {
+        pt = prevEvalPt!;
+      } else if (
+        anchorHeatGrid &&
+        anchorHumGrid &&
+        anchorBlendGrid &&
+        anchorElevGrid &&
+        anchorElevBlendGrid
+      ) {
         const gxFloat = (px / Math.max(1, size - 1)) * (GRID_N - 1);
         const gx0 = Math.min(GRID_N - 2, Math.floor(gxFloat));
         const tx = gxFloat - gx0;
@@ -626,7 +913,13 @@ export function renderTilePngBuffer(
           anchorBlendGrid[i11] * w11;
         const aBlend = job.isolatedBiomeId ? rawBlend * 0.25 : rawBlend;
 
-        if (aBlend > 0.01) {
+        const aElevBlend =
+          anchorElevBlendGrid[i00] * w00 +
+          anchorElevBlendGrid[i10] * w10 +
+          anchorElevBlendGrid[i01] * w01 +
+          anchorElevBlendGrid[i11] * w11;
+
+        if (aBlend > 0.01 || aElevBlend > 0.01) {
           const aHeat =
             anchorHeatGrid[i00] * w00 +
             anchorHeatGrid[i10] * w10 +
@@ -637,43 +930,135 @@ export function renderTilePngBuffer(
             anchorHumGrid[i10] * w10 +
             anchorHumGrid[i01] * w01 +
             anchorHumGrid[i11] * w11;
-          pt = synth.evaluatePointWithClimateAnchor(worldX, worldZ, aHeat, aHum, aBlend, refSliceY);
+          const aElev =
+            anchorElevGrid[i00] * w00 +
+            anchorElevGrid[i10] * w10 +
+            anchorElevGrid[i01] * w01 +
+            anchorElevGrid[i11] * w11;
+          pt = synth.evaluatePointWithClimateAnchor(
+            worldX,
+            worldZ,
+            aHeat,
+            aHum,
+            aBlend,
+            refSliceY,
+            job.voronoiContoursEnabled,
+            aElev,
+            aElevBlend
+          );
         } else {
-          pt = synth.evaluatePoint(worldX, worldZ, refSliceY);
+          pt = synth.evaluatePoint(worldX, worldZ, refSliceY, job.voronoiContoursEnabled);
         }
       } else {
-        pt = synth.evaluatePoint(worldX, worldZ, refSliceY);
+        pt = synth.evaluatePoint(worldX, worldZ, refSliceY, job.voronoiContoursEnabled);
       }
+
+      currRowElev[px] = pt.elevation;
       let [r, g, b] = job.hypsometricMode
         ? elevationToHypsometricRgb(pt.elevation, job.waterLevel)
         : pt.biome.color;
 
       if (pt.elevation < job.waterLevel) {
-        const depth = Math.min(35, job.waterLevel - pt.elevation);
-        const depthFactor = Math.max(0.5, 1 - depth * 0.015);
-        r = Math.round(r * depthFactor);
-        g = Math.round(g * depthFactor);
-        b = Math.round(b * depthFactor);
-      } else if (job.hillshadeEnabled) {
-        const nwElev = synth.evaluateElevation(worldX - sampleStep, worldZ + sampleStep);
-        const slope = (pt.elevation - nwElev) / Math.max(1, sampleStep * 0.42);
-        const shade = Math.max(-42, Math.min(42, Math.round(slope * 16)));
-        r = Math.max(0, Math.min(255, r + shade));
-        g = Math.max(0, Math.min(255, g + shade));
-        b = Math.max(0, Math.min(255, b + shade));
+        const depth = Math.max(1, Math.min(35, Math.round(job.waterLevel - pt.elevation)));
+        if (!job.hypsometricMode) {
+          // Match SQLite's bathymetric ocean shader (52% cerulean water + 48% Voronoi ocean biome)
+          r = Math.round(39 * 0.52 + r * 0.48);
+          g = Math.round(146 * 0.52 + g * 0.48);
+          b = Math.round(219 * 0.52 + b * 0.48);
+          if (depth <= 1) {
+            r = Math.min(255, r + 26);
+            g = Math.min(255, g + 52);
+            b = Math.min(255, b + 22);
+          } else if (depth === 2) {
+            r = Math.min(255, r + 12);
+            g = Math.min(255, g + 26);
+            b = Math.min(255, b + 10);
+          } else {
+            const band = Math.floor(depth / 3);
+            const drop = Math.min(68, (depth - 2) * 2.5 + band * 4);
+            r = Math.max(10, r - Math.round(drop * 0.68));
+            g = Math.max(22, g - Math.round(drop * 0.88));
+            b = Math.max(48, b - Math.round(drop * 0.6));
+          }
 
-        if (pt.elevation > job.waterLevel) {
-          if (pt.elevation % 20 === 0) {
-            r = Math.round(r * 0.72);
-            g = Math.round(g * 0.72);
-            b = Math.round(b * 0.72);
-          } else if (pt.elevation % 10 === 0) {
-            r = Math.round(r * 0.86);
-            g = Math.round(g * 0.86);
-            b = Math.round(b * 0.86);
+          if (job.hillshadeEnabled && depth >= 2) {
+            const nwElev =
+              stepX >= 1.0 && py > 0 && px > 0
+                ? prevRowElev[px - 1]
+                : synth.evaluateElevation(worldX - sampleStep, worldZ + sampleStep);
+            const bathySlope = (pt.elevation - nwElev) / Math.max(1, sampleStep * 0.42);
+            const bathyShade = Math.max(-24, Math.min(24, Math.round(bathySlope * 10)));
+            r = Math.max(0, Math.min(255, r + bathyShade));
+            g = Math.max(0, Math.min(255, g + bathyShade));
+            b = Math.max(0, Math.min(255, b + Math.round(bathyShade * 0.88)));
+
+            if (depth % 8 === 0) {
+              r = Math.round(r * 0.82);
+              g = Math.round(g * 0.82);
+              b = Math.round(b * 0.84);
+            } else if (depth % 4 === 0) {
+              r = Math.round(r * 0.91);
+              g = Math.round(g * 0.91);
+              b = Math.round(b * 0.92);
+            }
+          }
+        } else {
+          const depthFactor = Math.max(0.5, 1 - depth * 0.015);
+          r = Math.round(r * depthFactor);
+          g = Math.round(g * depthFactor);
+          b = Math.round(b * depthFactor);
+        }
+      } else {
+        if (!job.hypsometricMode) {
+          const relY = Math.max(0, pt.elevation - job.waterLevel);
+          const elevLift = Math.min(18, Math.round(relY * 0.42)) - 4;
+          const terraceStep = (pt.elevation & 1) === 0 ? 2 : -2;
+          const delta = elevLift + terraceStep;
+          r = Math.max(0, Math.min(255, r + delta + (relY > 18 ? 3 : 0)));
+          g = Math.max(0, Math.min(255, g + delta));
+          b = Math.max(0, Math.min(255, b + delta - (relY > 18 ? 3 : 0)));
+        }
+
+        if (job.hillshadeEnabled) {
+          let shade: number;
+          if (reusedSameWorldCoord) {
+            shade = prevEvalShade;
+          } else {
+            const nwElev =
+              stepX >= 1.0 && py > 0 && px > 0
+                ? prevRowElev[px - 1]
+                : synth.evaluateElevation(worldX - sampleStep, worldZ + sampleStep);
+            const slope = (pt.elevation - nwElev) / Math.max(1, sampleStep * 0.42);
+            shade = Math.max(-42, Math.min(42, Math.round(slope * 14)));
+            prevEvalShade = shade;
+          }
+          if (shade >= 0) {
+            r = Math.min(255, r + Math.round(shade * 1.1));
+            g = Math.min(255, g + Math.round(shade * 1.02));
+            b = Math.min(255, b + Math.round(shade * 0.84));
+          } else {
+            r = Math.max(0, r + Math.round(shade * 1.08));
+            g = Math.max(0, g + Math.round(shade * 0.96));
+            b = Math.max(0, b + Math.round(shade * 0.76));
+          }
+
+          if (pt.elevation > job.waterLevel) {
+            if (pt.elevation % 20 === 0) {
+              r = Math.round(r * 0.72);
+              g = Math.round(g * 0.72);
+              b = Math.round(b * 0.72);
+            } else if (pt.elevation % 10 === 0) {
+              r = Math.round(r * 0.86);
+              g = Math.round(g * 0.86);
+              b = Math.round(b * 0.86);
+            }
           }
         }
       }
+
+      prevEvalWorldX = worldX;
+      prevEvalWorldZ = worldZ;
+      prevEvalPt = pt;
 
       if (job.voronoiContoursEnabled && pt.isVoronoiBorder) {
         r = Math.round(r * 0.42 + 15);
@@ -710,6 +1095,10 @@ export function renderTilePngBuffer(
       rgba[idx + 2] = b;
       rgba[idx + 3] = 255;
     }
+
+    const tmpRow = prevRowElev;
+    prevRowElev = currRowElev;
+    currRowElev = tmpRow;
   }
 
   return encodeRgbaToPngBuffer(size, size, rgba);

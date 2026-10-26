@@ -2,9 +2,10 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MARKER_CATEGORY_COLORS, MapStore } from '../../core/state/map.store';
-import { MapMarker, MapMarkerCategory } from '../../core/models/world.model';
+import { DiscoveredWorldRegion, MapMarker, MapMarkerCategory } from '../../core/models/world.model';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { TooltipDirective } from '../../shared/directives/tooltip.directive';
+import { copyWithSignalFeedback } from '../../core/utils/format.utils';
 import {
   LucideCheck,
   LucideCopy,
@@ -91,7 +92,7 @@ import {
             [class.text-white]="showCreateForm()"
             class="px-2.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold flex items-center gap-1 transition cursor-pointer">
             <svg lucidePlus class="w-3.5 h-3.5"></svg>
-            <span>Custom</span>
+            <span>{{ 'markers.customToggle' | translate }}</span>
           </button>
         </div>
 
@@ -99,13 +100,13 @@ import {
         @if (showCreateForm()) {
           <div class="pt-2.5 border-t border-slate-800 space-y-2">
             <div class="flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
-              <span>{{ editingMarkerId() ? 'Edit Marker' : 'New Custom Marker' }}</span>
+              <span>{{ (editingMarkerId() ? 'markers.editMarkerTitle' : 'markers.newMarkerTitle') | translate }}</span>
               <button
                 type="button"
                 (click)="fillFromCursor()"
                 appTooltip="Copy current map cursor (X, Y, Z) into form fields"
                 class="text-sky-400 hover:text-sky-300 font-mono lowercase">
-                use cursor ({{ mapStore.cursorSample().x }}, {{ mapStore.cursorSample().y }}, {{ mapStore.cursorSample().z }})
+                {{ 'markers.useCursorBtn' | translate }} ({{ mapStore.cursorSample().x }}, {{ mapStore.cursorSample().y }}, {{ mapStore.cursorSample().z }})
               </button>
             </div>
 
@@ -244,7 +245,7 @@ import {
       <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2 flex-1 min-h-[160px]">
         <div class="flex items-center justify-between">
           <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            Saved Waypoints ({{ filteredMarkers().length }})
+            {{ 'markers.savedWaypoints' | translate }} ({{ filteredMarkers().length }})
           </span>
           @if (mapStore.markers().length > 0) {
             <button
@@ -253,7 +254,7 @@ import {
               appTooltip="Delete all saved markers from local storage"
               tooltipPosition="left"
               class="text-[10px] text-rose-400 hover:text-rose-300 font-medium">
-              Clear All
+              {{ 'markers.clearAllBtn' | translate }}
             </button>
           }
         </div>
@@ -317,7 +318,7 @@ import {
                       appTooltip="Edit marker label, coordinates, or category"
                       tooltipPosition="left"
                       class="px-1.5 py-0.5 rounded bg-slate-950 hover:bg-slate-700 text-[10px] text-slate-300 transition">
-                      Edit
+                      {{ 'common.edit' | translate }}
                     </button>
                     <button
                       type="button"
@@ -335,10 +336,84 @@ import {
         }
       </div>
 
+      <!-- Discovered Bases & Structures Section -->
+      <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2 flex-shrink-0">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5 font-semibold text-slate-200">
+            <svg lucideEye class="w-3.5 h-3.5 text-sky-400"></svg>
+            <span>Discovered Bases & Structures</span>
+            <span class="text-[10px] text-slate-400 font-mono">({{ (mapStore.worldDatabase()?.discoveredRegions || []).length }})</span>
+          </div>
+          <button
+            type="button"
+            (click)="mapStore.toggleDiscoveredRegionsVisible()"
+            [appTooltip]="mapStore.discoveredRegionsVisible() ? 'Hide dynamically discovered structures on map canvas' : 'Show dynamically discovered structures on map canvas'"
+            tooltipPosition="left"
+            [class.text-sky-400]="mapStore.discoveredRegionsVisible()"
+            [class.text-slate-500]="!mapStore.discoveredRegionsVisible()"
+            class="p-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 transition">
+            @if (mapStore.discoveredRegionsVisible()) {
+              <svg lucideEye class="w-3.5 h-3.5"></svg>
+            } @else {
+              <svg lucideEyeOff class="w-3.5 h-3.5"></svg>
+            }
+          </button>
+        </div>
+
+        <div class="p-2 rounded-lg bg-slate-900/70 border border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
+          Detected by sector scanning: concentrations of crafted or structural blocks (wood planks, stone bricks, glass, chests). May represent player bases, mining outposts, mod ruins, or dungeon structures.
+        </div>
+
+        @if ((mapStore.worldDatabase()?.discoveredRegions || []).length === 0) {
+          <div class="py-3 px-2 text-center text-slate-500 text-[11px] italic">
+            No structures discovered yet. Explore the map to stream sectors and detect bases!
+          </div>
+        } @else {
+          <div class="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
+            @for (reg of (mapStore.worldDatabase()?.discoveredRegions || []); track reg.label + reg.centerX) {
+              <div class="p-2 rounded-lg bg-slate-900/90 hover:bg-slate-800/70 border border-slate-800 flex items-center justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-1.5">
+                    <span
+                      class="w-2 h-2 rounded-full flex-shrink-0"
+                      [class.bg-sky-400]="reg.kind === 'base'"
+                      [class.bg-emerald-400]="reg.kind !== 'base'"></span>
+                    <span class="font-semibold text-slate-200 truncate text-[11px]">{{ reg.label }}</span>
+                    @if (reg.blockCount) {
+                      <span class="text-[9px] px-1 py-0.2 rounded bg-slate-950 text-slate-400 font-mono">{{ reg.blockCount }} blk</span>
+                    }
+                  </div>
+                  <div class="font-mono text-[10px] text-sky-400/90 mt-0.5">
+                    X: {{ reg.centerX }} · Z: {{ reg.centerZ }}
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    (click)="jumpToCoords(reg.centerX, reg.centerZ)"
+                    appTooltip="Center map on this structure"
+                    class="p-1 rounded bg-slate-950 hover:bg-slate-700 text-slate-300 transition">
+                    <svg lucideCrosshair class="w-3 h-3 text-sky-400"></svg>
+                  </button>
+                  <button
+                    type="button"
+                    (click)="pinRegionAsWaypoint(reg)"
+                    appTooltip="Pin as permanent waypoint in your markers list"
+                    class="p-1 rounded bg-slate-950 hover:bg-slate-700 text-slate-300 transition">
+                    <svg lucidePlus class="w-3 h-3 text-emerald-400"></svg>
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
       <!-- Export / Import JSON & Luanti Waypoints -->
       <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2 flex-shrink-0">
         <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-           Portability (Markers + Custom Biomes JSON)
+           {{ 'markers.portabilitySection' | translate }}
         </div>
 
         <div class="grid grid-cols-2 gap-1.5">
@@ -560,8 +635,27 @@ export class MarkersPanelComponent {
   public copyAllWaypoints(): void {
     const txt = this.mapStore.exportLuantiWaypointsTxt();
     if (!txt) return;
-    navigator.clipboard?.writeText(txt);
-    this.copiedWaypoints.set(true);
-    setTimeout(() => this.copiedWaypoints.set(false), 1800);
+    copyWithSignalFeedback(txt, this.copiedWaypoints);
+  }
+
+  public jumpToCoords(x: number, z: number): void {
+    this.mapStore.requestCameraJump(x, z, 7.0);
+  }
+
+  public pinRegionAsWaypoint(region: DiscoveredWorldRegion): void {
+    const newMarker: MapMarker = {
+      id: `discovered_${Date.now()}`,
+      label: region.label || 'Discovered Base',
+      x: region.centerX,
+      y: region.avgY ?? 0,
+      z: region.centerZ,
+      category: 'base',
+      color: '#38bdf8',
+      notes: `Structure with ${region.blockCount || 'multiple'} crafted blocks (primary material: ${region.dominantNode || 'unknown'})`,
+      createdAt: Date.now()
+    };
+    this.mapStore.addMarker(newMarker);
+    this.statusBanner.set(`Pinned "${newMarker.label}" as permanent waypoint!`);
+    setTimeout(() => this.statusBanner.set(null), 3000);
   }
 }

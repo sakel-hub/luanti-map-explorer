@@ -13,14 +13,21 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import maplibregl from 'maplibre-gl';
 import { MapStore } from '../../core/state/map.store';
+import { DiscoveredWorldRegion, MapMarker } from '../../core/models/world.model';
 import { CoordProjectionService } from '../../core/services/coord-projection.service';
 import { WorkerPoolService } from '../../core/services/worker-pool.service';
 import { WorldLoaderService } from '../../core/services/world-loader.service';
 import { RoutePlannerService } from '../../core/services/route-planner.service';
+import { TreeSpriteService } from '../../core/services/tree-sprite.service';
 import { TooltipDirective } from '../../shared/directives/tooltip.directive';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { formatDurationSeconds } from '../../core/utils/format.utils';
 import {
+  classifyColumnExtrusionKind,
+  resolveNodeNameFromExactColor
+} from '../../core/utils/mapblock-parser';
+import {
+  LucideBox,
   LucideCompass,
   LucideMountain,
   LucideGrid3x3,
@@ -32,7 +39,11 @@ import {
   LucideMapPin,
   LucideRoute,
   LucideCheck,
-  LucideX
+  LucideX,
+  LucideCopy,
+  LucideRotateCcw,
+  LucideTrees,
+  LucideInfo
 } from '@lucide/angular';
 
 let protocolRegistered = false;
@@ -45,6 +56,7 @@ let protocolRegistered = false;
     FormsModule,
     TooltipDirective,
     TranslatePipe,
+    LucideBox,
     LucideCompass,
     LucideMountain,
     LucideGrid3x3,
@@ -56,7 +68,11 @@ let protocolRegistered = false;
     LucideMapPin,
     LucideRoute,
     LucideCheck,
-    LucideX
+    LucideX,
+    LucideCopy,
+    LucideRotateCcw,
+    LucideTrees,
+    LucideInfo
   ],
   template: `
     <div class="relative w-full h-full bg-slate-950 overflow-hidden select-none">
@@ -78,7 +94,7 @@ let protocolRegistered = false;
             </span>
             <span class="h-3.5 w-px bg-slate-800"></span>
             <span class="font-mono text-slate-300">
-              Seed: <strong class="text-white">{{ mapStore.worldConfig().seed }}</strong>
+              {{ 'header.seedLabel' | translate }}: <strong class="text-white">{{ mapStore.worldConfig().seed }}</strong>
             </span>
             <span class="hidden sm:inline h-3.5 w-px bg-slate-800"></span>
             <span class="hidden sm:inline font-mono text-emerald-400 uppercase">
@@ -94,11 +110,11 @@ let protocolRegistered = false;
               [class.bg-sky-600]="mapStore.terrain3dEnabled()"
               [class.text-white]="mapStore.terrain3dEnabled()"
               [class.text-slate-300]="!mapStore.terrain3dEnabled()"
-              [appTooltip]="'Toggle 3D WebGL terrain elevation relief and hillshading'"
+              [appTooltip]="'viewport.toggle3D' | translate"
               [appTooltipShortcutId]="'view_3d'"
               class="px-2 py-1 rounded-lg font-semibold flex items-center gap-1.5 transition">
               <svg lucideMountain class="w-3.5 h-3.5"></svg>
-              <span>{{ mapStore.terrain3dEnabled() ? '3D Relief ON' : '2D Flat' }}</span>
+              <span>{{ (mapStore.terrain3dEnabled() ? 'viewport.relief3dOn' : 'viewport.flat2d') | translate }}</span>
             </button>
 
             <button
@@ -107,15 +123,15 @@ let protocolRegistered = false;
               [class.bg-amber-600]="mapStore.hypsometricMode()"
               [class.text-white]="mapStore.hypsometricMode()"
               [class.text-slate-300]="!mapStore.hypsometricMode()"
-              [appTooltip]="'Color map by Elevation Height Ramp instead of Biome Colors'"
+              [appTooltip]="'worldPanel.hypsometricColors' | translate"
               class="px-2 py-1 rounded-lg font-semibold transition">
-              {{ mapStore.hypsometricMode() ? 'Elev Colors' : 'Biome Colors' }}
+              {{ (mapStore.hypsometricMode() ? 'viewport.elevColors' : 'viewport.biomeColors') | translate }}
             </button>
           </div>
 
           <!-- Quick Vertical Depth / Elevation Slicer Pills (Sky Islands / Surface / Caves / Abyss) -->
-          <div class="px-1.5 py-1 rounded-xl bg-slate-950/90 border border-sky-900/70 backdrop-blur-md shadow-xl flex items-center gap-1 text-[11px] pointer-events-auto">
-            <span class="px-1.5 font-mono text-[10px] text-sky-400 hidden md:inline">Y-Slice:</span>
+          <div class="px-1.5 py-1 rounded-xl bg-slate-950/90 border border-sky-900/70 backdrop-blur-md shadow-xl flex items-center gap-1 text-[11px] pointer-events-auto overflow-x-auto max-w-full">
+            <span class="px-1.5 font-mono text-[10px] text-sky-400 hidden md:inline">{{ 'viewport.ySliceLabel' | translate }}</span>
             <button
               type="button"
               (click)="worldLoader.selectVerticalSlicePresetAndStream('floatlands', true)"
@@ -123,8 +139,8 @@ let protocolRegistered = false;
               [class.text-white]="mapStore.verticalSlice().presetId === 'floatlands'"
               [class.text-slate-300]="mapStore.verticalSlice().presetId !== 'floatlands'"
               [appTooltip]="'Sky Islands / Floatlands (Y: +480 to +1,760)'"
-              class="px-2 py-0.5 rounded-lg font-semibold transition">
-              Sky Islands
+              class="px-2 py-0.5 rounded-lg font-semibold transition whitespace-nowrap">
+              {{ 'viewport.sliceSky' | translate }}
             </button>
             <button
               type="button"
@@ -133,8 +149,8 @@ let protocolRegistered = false;
               [class.text-white]="mapStore.verticalSlice().presetId === 'surface'"
               [class.text-slate-300]="mapStore.verticalSlice().presetId !== 'surface'"
               [appTooltip]="'Main World Surface & Ocean (Y: -16 to +240)'"
-              class="px-2 py-0.5 rounded-lg font-semibold transition">
-              Surface
+              class="px-2 py-0.5 rounded-lg font-semibold transition whitespace-nowrap">
+              {{ 'viewport.sliceSurface' | translate }}
             </button>
             <button
               type="button"
@@ -143,8 +159,8 @@ let protocolRegistered = false;
               [class.text-white]="mapStore.verticalSlice().presetId === 'caves'"
               [class.text-slate-300]="mapStore.verticalSlice().presetId !== 'caves'"
               [appTooltip]="'Underground Caves & Mines X-Ray (Y: -1,024 to -17)'"
-              class="px-2 py-0.5 rounded-lg font-semibold transition">
-              Caves
+              class="px-2 py-0.5 rounded-lg font-semibold transition whitespace-nowrap">
+              {{ 'viewport.sliceCaves' | translate }}
             </button>
             <button
               type="button"
@@ -153,8 +169,8 @@ let protocolRegistered = false;
               [class.text-white]="mapStore.verticalSlice().presetId === 'deep_caverns'"
               [class.text-slate-300]="mapStore.verticalSlice().presetId !== 'deep_caverns'"
               [appTooltip]="'Deep Caverns & Magma X-Ray (Y: -10,240 to -1,025)'"
-              class="hidden sm:inline-block px-2 py-0.5 rounded-lg font-semibold transition">
-              Deep Caverns
+              class="hidden sm:inline-block px-2 py-0.5 rounded-lg font-semibold transition whitespace-nowrap">
+              {{ 'viewport.sliceDeep' | translate }}
             </button>
             <button
               type="button"
@@ -163,8 +179,8 @@ let protocolRegistered = false;
               [class.text-white]="mapStore.verticalSlice().presetId === 'abyss'"
               [class.text-slate-300]="mapStore.verticalSlice().presetId !== 'abyss'"
               [appTooltip]="'Deep Abyss / Underworld X-Ray (Y: -31,000 to -10,241)'"
-              class="hidden lg:inline-block px-2 py-0.5 rounded-lg font-semibold transition">
-              Abyss
+              class="hidden lg:inline-block px-2 py-0.5 rounded-lg font-semibold transition whitespace-nowrap">
+              {{ 'viewport.sliceAbyss' | translate }}
             </button>
           </div>
 
@@ -193,7 +209,7 @@ let protocolRegistered = false;
             }
           </div>
 
-          @if (mapStore.isLoadingWorld() || worldLoader.isStreamingRegion() || workerPool.activeTasksCount() > 0) {
+          @if (mapStore.isLoadingWorld() || worldLoader.isStreamingRegion()) {
             @let prog = mapStore.loadProgress() || worldLoader.streamProgress();
             <div
               role="status"
@@ -225,58 +241,116 @@ let protocolRegistered = false;
                 </div>
               } @else {
                 <span>
-                  {{ worldLoader.isStreamingRegion() ? 'Streaming SQLite blocks...' : 'Baking 3D tiles (' + workerPool.activeTasksCount() + ')...' }}
+                  {{
+                    worldLoader.isStreamingRegion()
+                      ? 'Streaming SQLite blocks...'
+                      : 'Loading world data...'
+                  }}
                 </span>
               }
             </div>
           }
         </div>
 
-        <!-- Interactive 3D Camera Pitch, Orbit & Vertical Scale HUD Bar (Visible when 3D Relief is ON) -->
+        <!-- Interactive 3D Camera Pitch, Orbit & Vertical Scale HUD Bar (Visible when 3D Relief is ON, responsive on mobile) -->
         @if (mapStore.terrain3dEnabled()) {
-          <div class="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-950/90 border border-sky-900/60 backdrop-blur-md shadow-xl text-[11px] text-slate-300 w-fit">
-            <div class="flex items-center gap-1.5">
-              <span class="text-slate-400 font-medium">Tilt:</span>
+          <div class="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-950/90 border border-sky-900/60 backdrop-blur-md shadow-xl text-[11px] text-slate-300 w-fit max-w-full overflow-x-auto pointer-events-auto">
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <span class="text-slate-400 font-medium">{{ 'viewport.tiltLabel' | translate }}</span>
               <input
                 type="range"
                 min="0"
                 max="72"
                 step="1"
+                aria-label="3D Camera Tilt"
                 [ngModel]="mapStore.cameraState().pitch"
                 (ngModelChange)="setCameraPitch(+$event)"
-                class="w-16 accent-sky-500 cursor-pointer" />
+                class="w-12 sm:w-16 accent-sky-500 cursor-pointer" />
               <span class="font-mono text-sky-400 w-7">{{ mapStore.cameraState().pitch.toFixed(0) }}°</span>
             </div>
 
-            <span class="h-3.5 w-px bg-slate-800"></span>
+            <span class="h-3.5 w-px bg-slate-800 flex-shrink-0"></span>
 
-            <div class="flex items-center gap-1.5">
-              <span class="text-slate-400 font-medium">Orbit:</span>
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <span class="text-slate-400 font-medium">{{ 'viewport.orbitLabel' | translate }}</span>
               <input
                 type="range"
                 min="-180"
                 max="180"
                 step="2"
+                aria-label="3D Camera Orbit"
                 [ngModel]="mapStore.cameraState().bearing"
                 (ngModelChange)="setCameraBearing(+$event)"
-                class="w-16 accent-amber-500 cursor-pointer" />
+                class="w-12 sm:w-16 accent-amber-500 cursor-pointer" />
               <span class="font-mono text-amber-400 w-9">{{ mapStore.cameraState().bearing.toFixed(0) }}°</span>
             </div>
 
-            <span class="h-3.5 w-px bg-slate-800"></span>
+            <span class="h-3.5 w-px bg-slate-800 flex-shrink-0"></span>
 
-            <div class="flex items-center gap-1.5">
-              <span class="text-slate-400 font-medium">3D Scale:</span>
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <span class="text-slate-400 font-medium">{{ 'viewport.scale3dLabel' | translate }}</span>
               <input
                 type="range"
                 min="0.4"
                 max="3.0"
                 step="0.1"
+                aria-label="3D Vertical Scale"
                 [ngModel]="mapStore.terrainExaggeration()"
                 (ngModelChange)="mapStore.setTerrainExaggeration(+$event)"
-                class="w-16 accent-emerald-500 cursor-pointer" />
+                class="w-12 sm:w-16 accent-emerald-500 cursor-pointer" />
               <span class="font-mono text-emerald-400 w-8">{{ mapStore.terrainExaggeration().toFixed(1) }}×</span>
             </div>
+
+            <button
+              type="button"
+              (click)="reset3DCameraDefaults()"
+              [appTooltip]="'viewport.resetNorth' | translate"
+              [appTooltipShortcutId]="'reset_north'"
+              aria-label="Reset 3D Camera"
+              class="p-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-slate-300 hover:text-sky-300 transition flex-shrink-0">
+              <svg lucideRotateCcw class="w-3 h-3"></svg>
+            </button>
+
+            <span class="h-3.5 w-px bg-slate-800 flex-shrink-0"></span>
+
+            <button
+              type="button"
+              (click)="mapStore.cycleExtrusionFilterMode()"
+              [appTooltip]="
+                is3DModelsZoomActive()
+                  ? 'Cycle 3D Extrusions Mode: All (Structures + Bamboo & Crystal Pillars) → Flora & Pillars Only → Structures Only → OFF'
+                  : '3D Voxel Models are rendered in Detail 1:1 view (Z >= 6.0). Click to cycle filter mode or click Detail 1:1 to view 3D structures & pillars.'
+              "
+              tooltipPosition="bottom"
+              [class.bg-emerald-600]="mapStore.buildingExtrusions3dEnabled() && is3DModelsZoomActive()"
+              [class.bg-amber-950]="mapStore.buildingExtrusions3dEnabled() && !is3DModelsZoomActive()"
+              [class.border]="mapStore.buildingExtrusions3dEnabled() && !is3DModelsZoomActive()"
+              [class.border-amber-500/40]="mapStore.buildingExtrusions3dEnabled() && !is3DModelsZoomActive()"
+              [class.bg-slate-800]="!mapStore.buildingExtrusions3dEnabled()"
+              [class.text-white]="mapStore.buildingExtrusions3dEnabled() && is3DModelsZoomActive()"
+              [class.text-amber-300]="mapStore.buildingExtrusions3dEnabled() && !is3DModelsZoomActive()"
+              [class.text-slate-400]="!mapStore.buildingExtrusions3dEnabled()"
+              class="px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition cursor-pointer flex-shrink-0 whitespace-nowrap">
+              <svg lucideBox class="w-3 h-3"></svg>
+              <span>
+                {{ 'viewport.models3dLabel' | translate }} {{ getExtrusionModeLabel() }}{{ mapStore.buildingExtrusions3dEnabled() && !is3DModelsZoomActive() ? ' (Detail 1:1)' : '' }}
+              </span>
+            </button>
+
+            <span class="h-3.5 w-px bg-slate-800 flex-shrink-0"></span>
+
+            <button
+              type="button"
+              (click)="mapStore.toggleTreeSprites()"
+              [class.bg-emerald-600]="mapStore.treeSpritesEnabled()"
+              [class.text-white]="mapStore.treeSpritesEnabled()"
+              [class.text-slate-400]="!mapStore.treeSpritesEnabled()"
+              [appTooltip]="'Toggle 2.5D Tree Sprites (Shortcut: T)'"
+              [appTooltipShortcutId]="'layer_trees'"
+              class="px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition cursor-pointer flex-shrink-0 whitespace-nowrap">
+              <svg lucideTrees class="w-3 h-3"></svg>
+              <span>{{ (mapStore.treeSpritesEnabled() ? 'viewport.treesOn' : 'viewport.treesOff') | translate }}</span>
+            </button>
           </div>
         }
       </div>
@@ -469,23 +543,132 @@ let protocolRegistered = false;
         </div>
       }
 
+      <!-- Interactive Marker & Discovered Base Popup Bubble -->
+      @if (mapStore.activeMarkerPopup(); as popup) {
+        <div
+          class="absolute z-50 w-72 sm:w-80 rounded-2xl bg-slate-950/95 border border-sky-500/50 shadow-2xl backdrop-blur-xl p-3 flex flex-col gap-2.5 text-xs text-slate-200 select-none animate-in fade-in zoom-in-95 duration-150 pointer-events-auto -translate-x-1/2 -translate-y-full"
+          [style.left.px]="popup.screenX"
+          [style.top.px]="popup.screenY - 14">
+          
+          <!-- Header -->
+          <div class="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+            <div class="flex items-center gap-1.5 font-bold text-sm text-slate-100 min-w-0">
+              <span
+                class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                [style.backgroundColor]="popup.marker?.color || (popup.region?.kind === 'base' ? '#38bdf8' : '#10b981')"></span>
+              <span class="truncate">{{ popup.title }}</span>
+            </div>
+            <button
+              type="button"
+              (click)="mapStore.closeMarkerPopup()"
+              aria-label="Close"
+              class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition">
+              <svg lucideX class="w-3.5 h-3.5"></svg>
+            </button>
+          </div>
+
+          <!-- Coords Chips -->
+          <div class="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
+            <span class="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-slate-300">
+              X: <strong class="text-rose-400">{{ popup.x }}</strong>, Z: <strong class="text-sky-400">{{ popup.z }}</strong>
+              @if (popup.y !== undefined) {
+                , Y: <strong class="text-emerald-400">{{ popup.y }}</strong>
+              }
+            </span>
+            @if (popup.blockCount) {
+              <span class="px-2 py-0.5 rounded-md bg-sky-950/80 border border-sky-800/70 text-sky-300">
+                {{ popup.blockCount }} blocks
+              </span>
+            }
+            @if (popup.marker?.category) {
+              <span class="px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-800/70 text-amber-300 capitalize">
+                {{ popup.marker!.category }}
+              </span>
+            }
+          </div>
+
+          <!-- Discovered Region Explanation -->
+          @if (popup.region) {
+            <div class="p-2 rounded-xl bg-sky-950/40 border border-sky-900/60 text-[11px] text-sky-200/90 leading-relaxed flex flex-col gap-1">
+              <div class="flex items-center gap-1 font-semibold text-sky-300 text-[11px]">
+                <svg lucideInfo class="w-3.5 h-3.5 flex-shrink-0"></svg>
+                <span>Structure Detection Details</span>
+              </div>
+              <p class="text-[10.5px] text-slate-300">
+                A concentration of crafted or structural blocks (wood, brick, stone, glass, torches, chests) was detected. Commonly a <strong>player base</strong>, mining outpost, or modded dungeon/ruin.
+              </p>
+              @if (popup.dominantNode) {
+                <div class="text-[10px] text-sky-400/80 font-mono truncate">
+                  Primary material: {{ popup.dominantNode }}
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Custom Marker Notes -->
+          @if (popup.marker?.notes) {
+            <div class="p-2 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300 leading-snug">
+              {{ popup.marker!.notes }}
+            </div>
+          }
+
+          <!-- Action Buttons -->
+          <div class="flex items-center gap-1.5 pt-0.5">
+            <button
+              type="button"
+              (click)="centerOnPopupCoords(popup.x, popup.z)"
+              class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 hover:text-white transition font-semibold flex items-center justify-center gap-1 text-[11px]">
+              <svg lucideCrosshair class="w-3.5 h-3.5 text-sky-400"></svg>
+              <span>Center</span>
+            </button>
+
+            @if (popup.region) {
+              <button
+                type="button"
+                (click)="saveDiscoveredRegionAsWaypoint()"
+                class="flex-1 px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition font-semibold flex items-center justify-center gap-1 text-[11px] shadow-lg shadow-sky-900/40">
+                <svg lucideMapPin class="w-3.5 h-3.5"></svg>
+                <span>Pin as Waypoint</span>
+              </button>
+            }
+
+            <button
+              type="button"
+              (click)="copyPopupCoords()"
+              [appTooltip]="'Copy /teleport coordinates'"
+              class="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition">
+              <svg lucideCopy class="w-3.5 h-3.5"></svg>
+            </button>
+          </div>
+        </div>
+      }
+
       <!-- Bottom Live Telemetry Status Bar Overlay -->
       @if (mapStore.cursorSample(); as sample) {
         <div class="absolute bottom-3 left-3 right-3 z-20 pointer-events-none flex items-center justify-between gap-2">
-          <div class="px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800/90 backdrop-blur-md shadow-xl flex flex-wrap items-center gap-3 text-xs pointer-events-auto">
-            <!-- Node Coordinates -->
+          <div class="px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800/90 backdrop-blur-md shadow-xl flex flex-wrap items-center gap-2.5 sm:gap-3 text-xs pointer-events-auto">
+            <!-- Node Coordinates + 1-Click Copy Button -->
             <div class="font-mono flex items-center gap-1.5">
-              <span class="text-slate-400">Pos:</span>
+              <span class="text-slate-400">{{ 'viewport.posLabel' | translate }}</span>
               <span class="text-rose-400 font-semibold">X:{{ sample.x }}</span>
               <span class="text-emerald-400 font-semibold">Y:{{ sample.y }}</span>
               <span class="text-sky-400 font-semibold">Z:{{ sample.z }}</span>
+              <button
+                type="button"
+                (click)="copySampleTeleport(sample.x, sample.y, sample.z)"
+                [appTooltip]="'viewport.copyCoordsTooltip' | translate"
+                tooltipPosition="top"
+                aria-label="Copy /teleport coordinates"
+                class="p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-sky-400 transition">
+                <svg lucideCopy class="w-3 h-3"></svg>
+              </button>
             </div>
 
             <span class="hidden sm:inline h-3.5 w-px bg-slate-800"></span>
 
             <!-- MapBlock Coordinate -->
             <div class="hidden sm:flex font-mono items-center gap-1 text-[11px] text-slate-300">
-              <span class="text-slate-500">Block:</span>
+              <span class="text-slate-500">{{ 'viewport.blockLabel' | translate }}</span>
               <span>({{ sample.blockX }}, {{ sample.blockZ }})</span>
             </div>
 
@@ -494,8 +677,9 @@ let protocolRegistered = false;
             <!-- Active Zoom & Downsampling LOD Badge -->
             <div
               [appTooltip]="getActiveLodPreset().tooltip"
+              tooltipPosition="top"
               class="font-mono flex items-center gap-1.5 text-[11px]">
-              <span class="text-slate-400">Zoom:</span>
+              <span class="text-slate-400 hidden sm:inline">{{ 'viewport.zoomLabel' | translate }}</span>
               <span class="text-sky-400 font-bold">{{ mapStore.cameraState().zoom.toFixed(1) }}</span>
               <span class="px-1.5 py-0.5 rounded bg-sky-950/90 border border-sky-800/80 text-sky-300 font-semibold text-[10px]">
                 {{ getActiveLodPreset().shortLabel }} · {{ getActiveLodPreset().resBadge }}
@@ -516,14 +700,14 @@ let protocolRegistered = false;
 
             <!-- Climate Values -->
             <div class="hidden md:flex items-center gap-2 font-mono text-[11px]">
-              <span class="text-amber-400">Heat: {{ sample.heat.toFixed(1) }}°</span>
-              <span class="text-sky-400">Hum: {{ sample.humidity.toFixed(1) }}%</span>
+              <span class="text-amber-400">{{ 'viewport.heatShort' | translate }} {{ sample.heat.toFixed(1) }}°</span>
+              <span class="text-sky-400">{{ 'viewport.humShort' | translate }} {{ sample.humidity.toFixed(1) }}%</span>
             </div>
 
             @if (sample.isExploredInDb && sample.dbNodeName) {
               <span class="hidden lg:inline h-3.5 w-px bg-slate-800"></span>
               <div class="hidden lg:flex items-center gap-1 font-mono text-[11px] text-purple-300">
-                <span>DB:</span>
+                <span>{{ 'viewport.dbShort' | translate }}</span>
                 <span class="font-semibold">{{ sample.dbNodeName }}</span>
               </div>
             }
@@ -542,6 +726,7 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
   public readonly workerPool = inject(WorkerPoolService);
   public readonly worldLoader = inject(WorldLoaderService);
   public readonly routePlanner = inject(RoutePlannerService);
+  public readonly treeSprites = inject(TreeSpriteService);
   public readonly formatDuration = formatDurationSeconds;
 
   public readonly contextMenu = signal<{
@@ -613,8 +798,25 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
     this.mapStore.setCameraZoomPreset(targetZoom);
   }
 
+  public getExtrusionModeLabel(): string {
+    const mode = this.mapStore.extrusionFilterMode();
+    if (mode === 'all') return 'All (Structures + Flora)';
+    if (mode === 'pillars') return 'Flora & Pillars';
+    if (mode === 'structures') return 'Structures Only';
+    return 'OFF';
+  }
+
+  public is3DModelsZoomActive(): boolean {
+    return this.mapStore.cameraState().zoom >= 6.0;
+  }
+
   private map: maplibregl.Map | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private isMapMoving = false;
+  private pendingRefreshRev: number | null = null;
+  private lastDemRevision = -1;
+  private lastWasMacroZoomTier: boolean | null = null;
+  private hasActiveExtrusionFeatures = false;
 
   constructor() {
     try {
@@ -626,12 +828,37 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
         });
       });
 
-      // React to 3D Terrain toggle & exaggeration
+      // React to 3D Terrain toggle and vertical exaggeration ONLY (never re-triggered by 3D buildings toggle or DB streaming)
       effect(() => {
         const enabled3d = this.mapStore.terrain3dEnabled();
         const exaggeration = this.mapStore.terrainExaggeration();
         untracked(() => {
           this.apply3DTerrainState(enabled3d, exaggeration);
+        });
+      });
+
+      // React to 3D Building & Pillar extrusions separately from 3D DEM tiles
+      effect(() => {
+        this.mapStore.terrain3dEnabled();
+        this.mapStore.buildingExtrusions3dEnabled();
+        this.mapStore.extrusionFilterMode();
+        this.mapStore.terrainExaggeration();
+        this.mapStore.worldDatabase();
+        untracked(() => {
+          this.update3DBuildingExtrusions();
+        });
+      });
+
+      // React to 2.5D tree sprites toggle, 3D terrain mode, view mode, world config, or database changes
+      effect(() => {
+        this.mapStore.treeSpritesEnabled();
+        this.mapStore.terrain3dEnabled();
+        this.mapStore.viewMode();
+        this.mapStore.worldConfig();
+        this.mapStore.worldDatabase();
+        this.mapStore.renderRevision();
+        untracked(() => {
+          this.treeSprites.updateTreeSprites();
         });
       });
 
@@ -675,6 +902,20 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
           });
         }
       });
+
+      // React to camera orientation requests (e.g. N shortcut or Reset 3D Camera button)
+      effect(() => {
+        const orientReq = this.mapStore.cameraOrientationRequest();
+        if (orientReq && this.map) {
+          untracked(() => {
+            this.map?.easeTo({
+              pitch: orientReq.pitch,
+              bearing: orientReq.bearing,
+              duration: 300
+            });
+          });
+        }
+      });
     } catch {
       // Ignore outside injection context in unit tests
     }
@@ -687,6 +928,7 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
 
   public ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
+    this.treeSprites.reset();
     this.map?.remove();
     this.map = null;
   }
@@ -695,19 +937,31 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
     if (protocolRegistered || typeof window === 'undefined') return;
     protocolRegistered = true;
 
-    maplibregl.addProtocol('luanti', async params => {
+    maplibregl.addProtocol('luanti', async (params, abortController) => {
       const match = params.url.match(/luanti:\/\/tiles\/(color|terrain-dem)\/(\d+)\/(\d+)\/(\d+)\/(\d+)/);
       if (!match) {
         return { data: new ArrayBuffer(0) };
       }
 
       const kind = match[1] as 'color' | 'terrain-dem';
+      if (kind === 'terrain-dem' && !this.mapStore.terrain3dEnabled()) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
       const rev = parseInt(match[2], 10);
       const z = parseInt(match[3], 10);
       const x = parseInt(match[4], 10);
       const y = parseInt(match[5], 10);
 
-      const buffer = await this.workerPool.requestTile(kind, z, x, y, rev);
+      const camZoom = this.map ? this.map.getZoom() : this.mapStore.cameraState().zoom;
+      const buffer = await this.workerPool.requestTile(
+        kind,
+        z,
+        x,
+        y,
+        rev,
+        abortController?.signal,
+        camZoom
+      );
       return { data: buffer };
     });
   }
@@ -718,8 +972,11 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
 
     try {
       const initialCam = this.mapStore.cameraState();
+      const initial3d = this.mapStore.terrain3dEnabled();
+      this.lastWasMacroZoomTier = initialCam.zoom < 6.0;
       const [initLng, initLat] = this.projection.luantiToLngLat(initialCam.x, initialCam.z);
       const rev = this.mapStore.renderRevision();
+      this.lastDemRevision = initial3d ? rev : -1;
 
       this.map = new maplibregl.Map({
         container,
@@ -735,11 +992,18 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
             },
             'luanti-dem': {
               type: 'raster-dem',
-              tiles: [`luanti://tiles/terrain-dem/${rev}/{z}/{x}/{y}.png`],
-              tileSize: 128,
+              tiles: initial3d ? [`luanti://tiles/terrain-dem/${rev}/{z}/{x}/{y}.png`] : [],
+              tileSize: 64,
               minzoom: 0,
-              maxzoom: 10,
+              maxzoom: 7,
               encoding: 'mapbox'
+            },
+            'luanti-3d-buildings': {
+              type: 'geojson',
+              data: {
+                type: 'FeatureCollection',
+                features: []
+              }
             }
           },
           layers: [
@@ -764,20 +1028,35 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
               type: 'hillshade',
               source: 'luanti-dem',
               maxzoom: 7,
+              layout: {
+                visibility: initial3d ? 'visible' : 'none'
+              },
               paint: {
                 'hillshade-exaggeration': 0.28,
                 'hillshade-shadow-color': '#020617',
                 'hillshade-highlight-color': '#f8fafc',
                 'hillshade-accent-color': '#0f172a'
               }
+            },
+            {
+              id: 'luanti-3d-buildings-layer',
+              type: 'fill-extrusion',
+              source: 'luanti-3d-buildings',
+              minzoom: 6,
+              paint: {
+                'fill-extrusion-color': ['get', 'color'],
+                'fill-extrusion-height': ['get', 'height'],
+                'fill-extrusion-base': ['get', 'base_height'],
+                'fill-extrusion-opacity': 1
+              }
             }
           ]
         },
         center: [initLng, initLat],
         zoom: initialCam.zoom,
-        pitch: initialCam.pitch,
-        bearing: initialCam.bearing,
-        maxPitch: 75,
+        pitch: initial3d ? initialCam.pitch : 0,
+        bearing: initial3d ? initialCam.bearing : 0,
+        maxPitch: initial3d ? 75 : 0,
         minZoom: 1,
         maxZoom: 14,
         maxTileCacheSize: 250,
@@ -794,6 +1073,9 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
           this.mapStore.terrain3dEnabled(),
           this.mapStore.terrainExaggeration()
         );
+        if (this.map) {
+          this.treeSprites.initialize(this.map);
+        }
       });
 
       this.map.on('load', () => {
@@ -802,6 +1084,9 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
           this.mapStore.terrainExaggeration()
         );
         this.drawCoordinateGridOverlay();
+        if (this.map) {
+          this.treeSprites.initialize(this.map);
+        }
       });
 
       this.map.on('click', e => {
@@ -817,11 +1102,50 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
           this.routePlanner.calculateRoute();
           return;
         }
+
+        const hit = this.findHitMarkerOrRegion(e.point);
+        if (hit) {
+          if (hit.marker) {
+            this.mapStore.openMarkerPopup({
+              marker: hit.marker,
+              title: hit.marker.label,
+              x: hit.marker.x,
+              z: hit.marker.z,
+              y: hit.marker.y,
+              screenX: hit.screenX,
+              screenY: hit.screenY
+            });
+            this.mapStore.selectedMarkerId.set(hit.marker.id);
+          } else if (hit.region) {
+            this.mapStore.openMarkerPopup({
+              region: hit.region,
+              title: hit.region.label,
+              x: hit.region.centerX,
+              z: hit.region.centerZ,
+              y: hit.region.avgY,
+              screenX: hit.screenX,
+              screenY: hit.screenY,
+              blockCount: hit.region.blockCount,
+              dominantNode: hit.region.dominantNode
+            });
+          }
+          return;
+        }
+
+        if (this.mapStore.activeMarkerPopup()) {
+          this.mapStore.closeMarkerPopup();
+        }
       });
 
       this.map.on('mousemove', e => {
         const coords = this.projection.lngLatToLuanti(e.lngLat.lng, e.lngLat.lat);
         this.mapStore.setCursorPos(coords.x, coords.z);
+
+        const hit = this.findHitMarkerOrRegion(e.point);
+        const canvas = this.map?.getCanvas();
+        if (canvas && !this.routePlanner.pickingTarget()) {
+          canvas.style.cursor = hit ? 'pointer' : '';
+        }
       });
 
       this.map.on('contextmenu', e => {
@@ -848,6 +1172,10 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
         });
       });
 
+      this.map.on('movestart', () => {
+        this.isMapMoving = true;
+      });
+
       this.map.on('move', () => {
         if (!this.map) return;
         const center = this.map.getCenter();
@@ -859,15 +1187,43 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
           pitch: this.map.getPitch(),
           bearing: this.map.getBearing()
         });
+
+        const popup = this.mapStore.activeMarkerPopup();
+        if (popup) {
+          const [lng, lat] = this.projection.luantiToLngLat(popup.x, popup.z);
+          const p = this.map.project([lng, lat]);
+          this.mapStore.activeMarkerPopup.set({
+            ...popup,
+            screenX: p.x,
+            screenY: p.y
+          });
+        }
+
         this.drawCoordinateGridOverlay();
       });
 
       this.map.on('moveend', () => {
         if (!this.map) return;
+        this.isMapMoving = false;
+        const currentZoom = this.map.getZoom();
+        const isMacroTier = currentZoom < 6.0;
+        const crossedMacroTierBoundary =
+          this.lastWasMacroZoomTier !== null && this.lastWasMacroZoomTier !== isMacroTier;
+        this.lastWasMacroZoomTier = isMacroTier;
+
+        if (this.pendingRefreshRev !== null) {
+          const rev = this.pendingRefreshRev;
+          this.pendingRefreshRev = null;
+          this.refreshMapTiles(rev);
+        } else if (crossedMacroTierBoundary) {
+          this.refreshMapTiles(this.mapStore.renderRevision());
+        }
         const center = this.map.getCenter();
         const luantiCenter = this.projection.lngLatToLuanti(center.lng, center.lat);
         this.mapStore.saveCameraStateToStorage();
-        this.worldLoader.streamViewportBlocks(luantiCenter.x, luantiCenter.z, this.map.getZoom());
+        this.worldLoader.streamViewportBlocks(luantiCenter.x, luantiCenter.z, currentZoom);
+        this.update3DBuildingExtrusions();
+        this.treeSprites.updateTreeSprites();
       });
 
       if (typeof ResizeObserver !== 'undefined') {
@@ -882,8 +1238,24 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  private syncDemTilesIfNeeded(rev: number): void {
+    if (!this.map || !this.mapStore.terrain3dEnabled()) return;
+    if (this.lastDemRevision === rev) return;
+    try {
+      const demSource = this.map.getSource('luanti-dem') as maplibregl.RasterDEMTileSource | undefined;
+      if (demSource && typeof demSource.setTiles === 'function') {
+        this.lastDemRevision = rev;
+        demSource.setTiles([`luanti://tiles/terrain-dem/${rev}/{z}/{x}/{y}.png`]);
+      }
+    } catch {}
+  }
+
   private refreshMapTiles(rev: number): void {
     if (!this.map) return;
+    if (this.isMapMoving) {
+      this.pendingRefreshRev = rev;
+      return;
+    }
 
     try {
       const colorSource = this.map.getSource('luanti-color') as maplibregl.RasterTileSource | undefined;
@@ -895,9 +1267,8 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
         colorSource.setTiles([`luanti://tiles/color/${rev}/{z}/{x}/{y}.png`]);
       }
 
-      const demSource = this.map.getSource('luanti-dem') as maplibregl.RasterDEMTileSource | undefined;
-      if (demSource && typeof demSource.setTiles === 'function') {
-        demSource.setTiles([`luanti://tiles/terrain-dem/${rev}/{z}/{x}/{y}.png`]);
+      if (this.mapStore.terrain3dEnabled()) {
+        this.syncDemTilesIfNeeded(rev);
       }
     } catch {
       // Ignore if style is still initializing
@@ -908,7 +1279,7 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
     if (!this.map) return;
 
     try {
-      const demSource = this.map.getSource('luanti-dem');
+      const demSource = this.map.getSource('luanti-dem') as maplibregl.RasterDEMTileSource | undefined;
       if (!demSource) {
         this.map.once('style.load', () =>
           this.apply3DTerrainState(
@@ -919,9 +1290,8 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
         return;
       }
 
-      this.map.stop();
-
       if (enabled) {
+        this.syncDemTilesIfNeeded(this.mapStore.renderRevision());
         this.map.setMaxPitch(75);
         this.map.setTerrain({
           source: 'luanti-dem',
@@ -934,13 +1304,19 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
           this.map.easeTo({ pitch: 54, bearing: -18, duration: 450 });
         }
       } else {
+        this.lastDemRevision = -1;
+        this.workerPool.cancelPendingDemTiles();
         this.map.setTerrain(null);
         if (this.map.getLayer('luanti-webgl-hillshade')) {
           this.map.setLayoutProperty('luanti-webgl-hillshade', 'visibility', 'none');
         }
-        this.map.easeTo({ pitch: 0, bearing: 0, duration: 300 });
+        if (this.map.getPitch() > 0 || this.map.getBearing() !== 0) {
+          this.map.easeTo({ pitch: 0, bearing: 0, duration: 250 });
+        }
+        this.map.setMaxPitch(0);
       }
 
+      this.update3DBuildingExtrusions();
       this.map.triggerRepaint();
     } catch {
       // Retry once style finishes loading
@@ -963,12 +1339,16 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
     if (rect.width === 0 || rect.height === 0) return;
 
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    canvas.width = Math.round(rect.width * dpr);
-    canvas.height = Math.round(rect.height * dpr);
+    const targetW = Math.round(rect.width * dpr);
+    const targetH = Math.round(rect.height * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, rect.width, rect.height);
 
     if (this.mapStore.chunkGridEnabled()) {
@@ -1044,35 +1424,37 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
     }
 
     // Draw Origin (0, 0) Spawn Reticle Marker & Discovered Region Pins
-    const regions = this.mapStore.worldDatabase()?.discoveredRegions || [];
-    for (const region of regions) {
-      if (region.kind === 'spawn') continue;
-      const [rLng, rLat] = this.projection.luantiToLngLat(region.centerX, region.centerZ);
-      const rPt = this.map.project([rLng, rLat]);
-      if (rPt.x >= -40 && rPt.x <= rect.width + 40 && rPt.y >= -40 && rPt.y <= rect.height + 40) {
-        ctx.save();
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
-        ctx.strokeStyle =
-          region.kind === 'base'
-            ? '#38bdf8'
-            : region.kind === 'expedition'
-              ? '#f59e0b'
-              : '#10b981';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(rPt.x, rPt.y, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+    if (this.mapStore.discoveredRegionsVisible()) {
+      const regions = this.mapStore.worldDatabase()?.discoveredRegions || [];
+      for (const region of regions) {
+        if (region.kind === 'spawn') continue;
+        const [rLng, rLat] = this.projection.luantiToLngLat(region.centerX, region.centerZ);
+        const rPt = this.map.project([rLng, rLat]);
+        if (rPt.x >= -40 && rPt.x <= rect.width + 40 && rPt.y >= -40 && rPt.y <= rect.height + 40) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+          ctx.strokeStyle =
+            region.kind === 'base'
+              ? '#38bdf8'
+              : region.kind === 'expedition'
+                ? '#f59e0b'
+                : '#10b981';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(rPt.x, rPt.y, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
 
-        ctx.fillStyle =
-          region.kind === 'base'
-            ? '#bae6fd'
-            : region.kind === 'expedition'
-              ? '#fde68a'
-              : '#a7f3d0';
-        ctx.font = 'bold 10px monospace';
-        ctx.fillText(region.label, rPt.x + 8, rPt.y + 3);
-        ctx.restore();
+          ctx.fillStyle =
+            region.kind === 'base'
+              ? '#bae6fd'
+              : region.kind === 'expedition'
+                ? '#fde68a'
+                : '#a7f3d0';
+          ctx.font = 'bold 10px monospace';
+          ctx.fillText(region.label, rPt.x + 8, rPt.y + 3);
+          ctx.restore();
+        }
       }
     }
 
@@ -1386,6 +1768,24 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
     this.contextMenu.set(null);
   }
 
+  public async copySampleTeleport(x: number, y: number, z: number): Promise<void> {
+    const cmd = `/teleport ${x} ${y} ${z}`;
+    try {
+      await navigator.clipboard.writeText(cmd);
+    } catch {
+      // ignore
+    }
+    this.copiedFeedback.set(cmd);
+    setTimeout(() => this.copiedFeedback.set(null), 2000);
+  }
+
+  public reset3DCameraDefaults(): void {
+    this.mapStore.setPitch3D(52);
+    this.mapStore.setBearing3D(-28);
+    this.mapStore.setExaggeration(1.3);
+    this.map?.easeTo({ pitch: 52, bearing: -28, duration: 300 });
+  }
+
   public zoomIn(): void {
     this.map?.zoomIn({ duration: 220 });
   }
@@ -1427,5 +1827,350 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
     a.href = dataUrl;
     a.download = `luanti_map_${this.mapStore.worldConfig().seed}.png`;
     a.click();
+  }
+
+  private update3DBuildingExtrusions(): void {
+    if (!this.map) return;
+    const source = this.map.getSource('luanti-3d-buildings') as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    const filterMode = this.mapStore.extrusionFilterMode();
+    const zoom = this.map.getZoom();
+    const enabled =
+      this.mapStore.terrain3dEnabled() &&
+      this.mapStore.buildingExtrusions3dEnabled() &&
+      filterMode !== 'off' &&
+      zoom >= 6.0;
+
+    if (this.map.getLayer('luanti-3d-buildings-layer')) {
+      this.map.setLayoutProperty(
+        'luanti-3d-buildings-layer',
+        'visibility',
+        enabled ? 'visible' : 'none'
+      );
+    }
+
+    // Extrusions are active only when 3D terrain and building extrusions are enabled in Detail 1:1 view (zoom >= 6.0)
+    if (!enabled) {
+      if (this.hasActiveExtrusionFeatures) {
+        this.hasActiveExtrusionFeatures = false;
+        source.setData({
+          type: 'FeatureCollection',
+          features: []
+        });
+      }
+      return;
+    }
+
+    const db = this.mapStore.worldDatabase();
+    if (!db) {
+      if (this.hasActiveExtrusionFeatures) {
+        this.hasActiveExtrusionFeatures = false;
+        source.setData({
+          type: 'FeatureCollection',
+          features: []
+        });
+      }
+      return;
+    }
+
+    const bounds = this.map.getBounds();
+    const sw = this.projection.lngLatToLuanti(bounds.getWest(), bounds.getSouth());
+    const ne = this.projection.lngLatToLuanti(bounds.getEast(), bounds.getNorth());
+
+    const minX = Math.floor(Math.min(sw.x, ne.x));
+    const maxX = Math.ceil(Math.max(sw.x, ne.x));
+    const minZ = Math.floor(Math.min(sw.z, ne.z));
+    const maxZ = Math.ceil(Math.max(sw.z, ne.z));
+
+    const minBx = Math.floor(minX / 16);
+    const maxBx = Math.floor(maxX / 16);
+    const minBz = Math.floor(minZ / 16);
+    const maxBz = Math.floor(maxZ / 16);
+
+    // Guard against excessively large view frustums when camera is tilted at the horizon
+    const blockSpanX = Math.min(64, Math.max(0, maxBx - minBx + 1));
+    const blockSpanZ = Math.min(64, Math.max(0, maxBz - minBz + 1));
+    const clampedMaxBx = minBx + blockSpanX;
+    const clampedMaxBz = minBz + blockSpanZ;
+
+    const METERS_PER_NODE = 520;
+    const exaggeration = this.mapStore.terrainExaggeration() || 1;
+    const waterLevel = this.mapStore.worldConfig().waterLevel ?? 1;
+    const features: Array<{
+      type: 'Feature';
+      properties: {
+        base_height: number;
+        height: number;
+        color: string;
+      };
+      geometry: {
+        type: 'Polygon';
+        coordinates: number[][][];
+      };
+    }> = [];
+    const MAX_FEATURES = 2000;
+
+    const pushRun = (
+      bx: number,
+      bz: number,
+      wz: number,
+      startLx: number,
+      endLx: number,
+      runRelNodes: number,
+      runColor: string
+    ): void => {
+      if (features.length >= MAX_FEATURES) return;
+      const wx0 = bx * 16 + startLx;
+      const wx1 = bx * 16 + endLx + 1;
+      const wz0 = wz;
+      const wz1 = wz + 1;
+
+      const p0 = this.projection.luantiToLngLat(wx0, wz0);
+      const p1 = this.projection.luantiToLngLat(wx1, wz0);
+      const p2 = this.projection.luantiToLngLat(wx1, wz1);
+      const p3 = this.projection.luantiToLngLat(wx0, wz1);
+
+      // In MapLibre GL's TERRAIN3D shader, fill-extrusion-base and fill-extrusion-height are
+      // automatically offset by get_elevation(a_centroid) (which already includes exaggeration).
+      // Setting base_height: 0 anchors the building/pillar bottom into the terrain surface so it never floats!
+      const baseHeight = 0;
+      const topHeight = runRelNodes * METERS_PER_NODE * exaggeration;
+
+      features.push({
+        type: 'Feature',
+        properties: {
+          base_height: baseHeight,
+          height: topHeight,
+          color: runColor
+        },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[[p0[0], p0[1]], [p1[0], p1[1]], [p2[0], p2[1]], [p3[0], p3[1]], [p0[0], p0[1]]]]
+        }
+      });
+    };
+
+    const matchesFilter = (extKind: number): boolean => {
+      if (extKind <= 0) return false;
+      if (filterMode === 'pillars') return extKind === 2 || extKind === 3;
+      if (filterMode === 'structures') return extKind === 1;
+      return true;
+    };
+
+    // 1. Scan CompactBlockSurfaces for structures, bamboo stalks, and crystal pillars
+    if (db.blockSurfaces && db.blockSurfaces.size > 0) {
+      for (let bz = minBz; bz <= clampedMaxBz; bz++) {
+        for (let bx = minBx; bx <= clampedMaxBx; bx++) {
+          if (features.length >= MAX_FEATURES) break;
+
+          const blk = db.blockSurfaces.get(`${bx},${bz}`);
+          if (!blk) continue;
+
+          // Only inspect blocks that have extrudable structure/pillar nodes
+          if (!blk.playerNodeCount || blk.playerNodeCount <= 0) continue;
+
+          const groundYArr = blk.groundY;
+          const extKindArr = blk.extrusionKind;
+
+          for (let lz = 0; lz < 16; lz++) {
+            if (features.length >= MAX_FEATURES) break;
+            const wz = bz * 16 + lz;
+
+            let runStartX = -1;
+            let runRelNodes = 0;
+            let runColor = '';
+
+            for (let lx = 0; lx < 16; lx++) {
+              const idx = (lz << 4) | lx;
+              const topY = blk.topY[idx];
+              if (topY <= -32768 || blk.waterDepth[idx] > 0) {
+                if (runStartX !== -1) {
+                  pushRun(bx, bz, wz, runStartX, lx - 1, runRelNodes, runColor);
+                  runStartX = -1;
+                }
+                continue;
+              }
+
+              const cOff = idx * 3;
+              const r = blk.rgb[cOff];
+              const g = blk.rgb[cOff + 1];
+              const b = blk.rgb[cOff + 2];
+
+              let extKind = extKindArr ? extKindArr[idx] : 0;
+              if (!extKindArr) {
+                const nodeName = resolveNodeNameFromExactColor(r, g, b, 0, blk.dominantNode);
+                extKind = classifyColumnExtrusionKind(nodeName);
+              }
+
+              if (!matchesFilter(extKind)) {
+                if (runStartX !== -1) {
+                  pushRun(bx, bz, wz, runStartX, lx - 1, runRelNodes, runColor);
+                  runStartX = -1;
+                }
+                continue;
+              }
+
+              const rawGroundY =
+                groundYArr && groundYArr[idx] > -32768 ? groundYArr[idx] : blk.avgY;
+              // Never subtract underwater seabed depth (< waterLevel) for structures/pillars above water!
+              const baseRefY =
+                rawGroundY < waterLevel && topY > waterLevel ? waterLevel : rawGroundY;
+              const rawDiff = topY - baseRefY;
+
+              // Skip 1-block flat decks, floors, paths, or pool rims
+              if (rawDiff < 2) {
+                if (runStartX !== -1) {
+                  pushRun(bx, bz, wz, runStartX, lx - 1, runRelNodes, runColor);
+                  runStartX = -1;
+                }
+                continue;
+              }
+
+              const maxAllowedNodes = extKind === 3 ? 32 : extKind === 2 ? 28 : 18;
+              const relNodes = Math.min(maxAllowedNodes, rawDiff);
+              const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+
+              if (runStartX !== -1 && runRelNodes === relNodes && runColor === hex) {
+                // Continue contiguous run
+                continue;
+              } else {
+                if (runStartX !== -1) {
+                  pushRun(bx, bz, wz, runStartX, lx - 1, runRelNodes, runColor);
+                }
+                runStartX = lx;
+                runRelNodes = relNodes;
+                runColor = hex;
+              }
+            }
+
+            if (runStartX !== -1) {
+              pushRun(bx, bz, wz, runStartX, 15, runRelNodes, runColor);
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Fallback to surfaceColumns if blockSurfaces is not available
+    if (features.length === 0 && db.surfaceColumns && db.surfaceColumns.size > 0) {
+      for (const col of db.surfaceColumns.values()) {
+        if (features.length >= MAX_FEATURES) break;
+        if (col.x < minX || col.x > maxX || col.z < minZ || col.z > maxZ) continue;
+        const extKind = classifyColumnExtrusionKind(col.nodeName);
+        if (!matchesFilter(extKind)) continue;
+
+        const p0 = this.projection.luantiToLngLat(col.x, col.z);
+        const p1 = this.projection.luantiToLngLat(col.x + 1, col.z);
+        const p2 = this.projection.luantiToLngLat(col.x + 1, col.z + 1);
+        const p3 = this.projection.luantiToLngLat(col.x, col.z + 1);
+
+        const r = col.color[0];
+        const g = col.color[1];
+        const b = col.color[2];
+        const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+
+        const baseHeight = 0;
+        const topHeight = 2 * METERS_PER_NODE * exaggeration;
+
+        features.push({
+          type: 'Feature',
+          properties: {
+            base_height: baseHeight,
+            height: topHeight,
+            color: hex
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[[p0[0], p0[1]], [p1[0], p1[1]], [p2[0], p2[1]], [p3[0], p3[1]], [p0[0], p0[1]]]]
+          }
+        });
+      }
+    }
+
+    this.hasActiveExtrusionFeatures = features.length > 0;
+    source.setData({
+      type: 'FeatureCollection',
+      features
+    });
+  }
+
+  private findHitMarkerOrRegion(screenPoint: { x: number; y: number }): {
+    marker?: MapMarker;
+    region?: DiscoveredWorldRegion;
+    screenX: number;
+    screenY: number;
+  } | null {
+    if (!this.map) return null;
+
+    // 1. Check custom markers if visible
+    if (this.mapStore.markersVisible()) {
+      const markers = this.mapStore.markers();
+      for (let i = markers.length - 1; i >= 0; i--) {
+        const m = markers[i];
+        const [mLng, mLat] = this.projection.luantiToLngLat(m.x, m.z);
+        const mPt = this.map.project([mLng, mLat]);
+        const dist = Math.hypot(mPt.x - screenPoint.x, mPt.y - screenPoint.y);
+        if (dist <= 14) {
+          return { marker: m, screenX: mPt.x, screenY: mPt.y };
+        }
+      }
+    }
+
+    // 2. Check discovered regions if visible
+    if (this.mapStore.discoveredRegionsVisible()) {
+      const regions = this.mapStore.worldDatabase()?.discoveredRegions || [];
+      for (let i = regions.length - 1; i >= 0; i--) {
+        const r = regions[i];
+        if (r.kind === 'spawn') continue;
+        const [rLng, rLat] = this.projection.luantiToLngLat(r.centerX, r.centerZ);
+        const rPt = this.map.project([rLng, rLat]);
+        const dist = Math.hypot(rPt.x - screenPoint.x, rPt.y - screenPoint.y);
+        if (dist <= 14) {
+          return { region: r, screenX: rPt.x, screenY: rPt.y };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  public centerOnPopupCoords(x: number, z: number): void {
+    if (!this.map) return;
+    const [lng, lat] = this.projection.luantiToLngLat(x, z);
+    this.map.easeTo({ center: [lng, lat], duration: 400 });
+  }
+
+  public saveDiscoveredRegionAsWaypoint(): void {
+    const popup = this.mapStore.activeMarkerPopup();
+    if (!popup) return;
+    const newMarker: MapMarker = {
+      id: `discovered_${Date.now()}`,
+      label: popup.title || 'Discovered Base',
+      x: popup.x,
+      y: popup.y ?? 0,
+      z: popup.z,
+      category: 'base',
+      color: '#38bdf8',
+      notes: `Structure with ${popup.blockCount || 'multiple'} crafted blocks (primary material: ${popup.dominantNode || 'unknown'})`,
+      createdAt: Date.now()
+    };
+    this.mapStore.addMarker(newMarker);
+    this.copiedFeedback.set(`Saved "${newMarker.label}" as waypoint!`);
+    setTimeout(() => this.copiedFeedback.set(null), 2500);
+    this.mapStore.closeMarkerPopup();
+  }
+
+  public async copyPopupCoords(): Promise<void> {
+    const popup = this.mapStore.activeMarkerPopup();
+    if (!popup) return;
+    const cmd = `/teleport ${popup.x} ${popup.y ?? 0} ${popup.z}`;
+    try {
+      await navigator.clipboard.writeText(cmd);
+    } catch {
+      // fallback
+    }
+    this.copiedFeedback.set(cmd);
+    setTimeout(() => this.copiedFeedback.set(null), 2000);
   }
 }

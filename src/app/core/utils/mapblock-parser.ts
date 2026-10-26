@@ -9,6 +9,7 @@ import {
   VerticalSlicePresetId
 } from '../models/world.model';
 import { LUANTI_NODE_COLORS, resolveNodeColor } from '../data/node-colors';
+import { resolveSaplingForNode } from '../data/sapling-registry';
 import { LuantiWorldSynthesizer, createDefaultNoiseParams } from './perlin-noise';
 
 function isBiomeGroundSurfaceNode(name: string): boolean {
@@ -41,6 +42,181 @@ function isBiomeGroundSurfaceNode(name: string): boolean {
   );
 }
 
+export function isFoliageOrSpikeNode(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (
+    lower.includes('dirt') ||
+    lower.includes('sand') ||
+    lower.includes('gravel') ||
+    lower.includes('clay') ||
+    lower.includes('turf') ||
+    lower.includes('permafrost') ||
+    lower.includes('mud') ||
+    (lower.includes('stone') &&
+      !lower.includes('brick') &&
+      !lower.includes('cobble') &&
+      !lower.includes('wall') &&
+      !lower.includes('stair') &&
+      !lower.includes('slab'))
+  ) {
+    return false;
+  }
+  return (
+    lower.includes('leaves') ||
+    lower.includes('needles') ||
+    lower.includes('bamboo') ||
+    lower.includes('cactus') ||
+    lower.includes('bush') ||
+    lower.includes('flower') ||
+    lower.includes('fern') ||
+    lower.includes('torch') ||
+    lower.includes('sapling') ||
+    lower.includes('papyrus') ||
+    lower.includes('vine') ||
+    lower.includes('seaweed') ||
+    lower.includes('coral') ||
+    lower.includes('mushroom') ||
+    lower.includes('kelp') ||
+    lower.includes('crop') ||
+    lower.includes('wheat') ||
+    lower.includes('apple') ||
+    lower.includes('fruit') ||
+    lower.includes('trunk') ||
+    lower.includes('log') ||
+    lower.includes('stem') ||
+    lower.includes('bark') ||
+    lower.includes('branch') ||
+    lower.includes('crystal_megalith') ||
+    lower.includes('crystal_pillar') ||
+    lower.includes('crystal_block') ||
+    lower.includes('crystal_tree') ||
+    lower.includes('amethyst_block') ||
+    lower.includes('amethyst_cluster') ||
+    lower.includes('budding_amethyst') ||
+    lower.includes('amethyst_bud') ||
+    (lower.includes('grass_') && !lower.includes('dirt_with_')) ||
+    (lower.includes('tree') && !lower.includes('wood') && !lower.includes('plank'))
+  );
+}
+
+export function isTreeTrunkNode(name: string): boolean {
+  if (!name || name === 'air' || name === 'ignore') return false;
+  const lower = name.toLowerCase();
+  if (
+    lower.includes('wood') ||
+    lower.includes('plank') ||
+    lower.includes('stair') ||
+    lower.includes('slab') ||
+    lower.includes('fence') ||
+    lower.includes('door') ||
+    lower.includes('chest') ||
+    lower.includes('gate') ||
+    lower.includes('wall') ||
+    lower.includes('glass') ||
+    lower.includes('street')
+  ) {
+    return false;
+  }
+  return (
+    lower.includes('trunk') ||
+    lower.includes('log') ||
+    lower.includes('stem') ||
+    (lower.includes('tree') && !lower.includes('plank')) ||
+    lower.includes('cactus') ||
+    lower.includes('bamboo') ||
+    lower.includes('crystal_tree') ||
+    lower.includes('coral_tree') ||
+    lower.includes('coral_bones')
+  );
+}
+
+export function isTreeFoliageNode(name: string): boolean {
+  if (!name || name === 'air' || name === 'ignore') return false;
+  const lower = name.toLowerCase();
+  return (
+    lower.includes('leaves') ||
+    lower.includes('needles') ||
+    lower.includes('coral_leaves') ||
+    lower.includes('crystal_leaves') ||
+    lower.includes('coral_bones') ||
+    lower.includes('cactus') ||
+    lower.includes('bamboo')
+  );
+}
+
+export function isVerticalFloraPillarNode(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (
+    lower.includes('dirt') ||
+    lower.includes('mosaic') ||
+    lower.includes('plank') ||
+    lower.includes('door') ||
+    lower.includes('fence') ||
+    lower.includes('trapdoor') ||
+    lower.includes('pressure_plate') ||
+    lower.includes('scaffolding') ||
+    lower.includes('wood') ||
+    lower.includes('sprout') ||
+    lower.includes('sapling')
+  ) {
+    return false;
+  }
+  return lower.includes('bamboo') || lower.includes('cactus') || lower.includes('papyrus');
+}
+
+export function isCrystalPillarNode(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (
+    lower.includes('dirt') ||
+    lower.includes('sand') ||
+    lower.includes('moss') ||
+    lower.includes('cobble') ||
+    lower.includes('stone') ||
+    lower.includes('grass') ||
+    lower.includes('water') ||
+    lower.includes('bush')
+  ) {
+    return false;
+  }
+  return (
+    lower.includes('crystal_megalith') ||
+    lower.includes('crystal_pillar') ||
+    lower.includes('crystal_block') ||
+    lower.includes('crystal_tree') ||
+    lower.includes('crystal_leaves') ||
+    lower.includes('crystal_galleon') ||
+    lower.includes('amethyst_block') ||
+    lower.includes('amethyst_cluster') ||
+    lower.includes('budding_amethyst') ||
+    lower.includes('amethyst_bud') ||
+    lower.includes('quartz_pillar') ||
+    lower.startsWith('everness:crystal_')
+  );
+}
+
+export function isNaturalTerrainGroundNode(name: string): boolean {
+  if (
+    isPlayerStructuralNode(name) ||
+    isFoliageOrSpikeNode(name) ||
+    isVerticalFloraPillarNode(name) ||
+    isCrystalPillarNode(name)
+  ) {
+    return false;
+  }
+  if (isBiomeGroundSurfaceNode(name)) {
+    return true;
+  }
+  const lower = name.toLowerCase();
+  return (
+    lower.includes('water') ||
+    lower.includes('mud') ||
+    lower.includes('netherrack') ||
+    lower.includes('end_stone') ||
+    lower.includes('obsidian') ||
+    lower.includes('deepslate')
+  );
+}
+
 const EXACT_COLOR_TO_NODE_NAME: Record<number, string> = (() => {
   const map: Record<number, string> = {};
   for (const [nodeKey, c] of Object.entries(LUANTI_NODE_COLORS)) {
@@ -54,6 +230,17 @@ const EXACT_COLOR_TO_NODE_NAME: Record<number, string> = (() => {
 
 export function isPlayerStructuralNode(name: string): boolean {
   const lower = name.toLowerCase();
+  // Natural Everness travertine/mineral pool stones & biome cobbles are natural terrain, not buildings
+  if (
+    lower.includes('mineral_stone') ||
+    lower.includes('mineral_sand') ||
+    lower.includes('mineral_waters') ||
+    lower.includes('coral_desert_cobble') ||
+    lower.includes('crystal_cobble') ||
+    lower.includes('icecobble')
+  ) {
+    return false;
+  }
   return (
     lower.includes('stonebrick') ||
     lower.includes('sandstonebrick') ||
@@ -73,8 +260,52 @@ export function isPlayerStructuralNode(name: string): boolean {
     lower.includes('steelblock') ||
     lower.includes('goldblock') ||
     lower.includes('copperblock') ||
-    lower.includes('diamondblock')
+    lower.includes('diamondblock') ||
+    lower.includes('cobble') ||
+    lower.includes('plank') ||
+    lower.includes('wall') ||
+    lower.includes('roof') ||
+    lower.includes('concrete') ||
+    lower.includes('terracotta') ||
+    lower.includes('wool') ||
+    lower.includes('ladder')
   );
+}
+
+export function isExtrudableStructureWallNode(name: string): boolean {
+  if (!isPlayerStructuralNode(name)) return false;
+  const lower = name.toLowerCase();
+  // Exclude hanging sails (wool), thin masts/fences, rails, torches, doors, and 1-block containers from 3D wall extrusion
+  if (
+    lower.includes('wool') ||
+    lower.includes('fence') ||
+    lower.includes('rail') ||
+    lower.includes('ladder') ||
+    lower.includes('torch') ||
+    lower.includes('door') ||
+    lower.includes('protector') ||
+    lower.includes('chest') ||
+    lower.includes('furnace') ||
+    lower.includes('mossycobble')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Classifies a column's 3D extrusion category directly from its true voxel node name:
+ * 0 = None (Natural terrain, water, mineral pools, foliage canopy, decorative items)
+ * 1 = Structure (Player/architectural building walls, masonry, wood planks, towers)
+ * 2 = Vertical Flora Pillar (Bamboo stalks, Cactus, Papyrus)
+ * 3 = Crystal Pillar (Crystal Forest pillars/megaliths/trees, Amethyst clusters)
+ */
+export function classifyColumnExtrusionKind(name: string): 0 | 1 | 2 | 3 {
+  if (!name || name === 'air' || name === 'ignore') return 0;
+  if (isVerticalFloraPillarNode(name)) return 2;
+  if (isCrystalPillarNode(name)) return 3;
+  if (isExtrudableStructureWallNode(name)) return 1;
+  return 0;
 }
 
 export function resolveNodeNameFromExactColor(
@@ -238,6 +469,7 @@ export function mergeParsedBlockIntoCompactSurface(
   const key = `${b.blockX},${b.blockZ}`;
   let blk = blockSurfaces.get(key);
   let modified = false;
+  const treeCandidates: Array<{ lx: number; lz: number; y: number; saplingKey: string }> = [];
 
   for (let i = 0; i < b.columns.length; i++) {
     const col = b.columns[i];
@@ -247,12 +479,16 @@ export function mergeParsedBlockIntoCompactSurface(
     if (!blk) {
       const topYArr = new Int16Array(256);
       topYArr.fill(-32768);
+      const groundYArr = new Int16Array(256);
+      groundYArr.fill(-32768);
       blk = {
         bx: b.blockX,
         bz: b.blockZ,
         rgb: new Uint8Array(768),
         topY: topYArr,
+        groundY: groundYArr,
         waterDepth: new Uint8Array(256),
+        extrusionKind: new Uint8Array(256),
         dominantNode: col.nodeName,
         avgColor: [0, 0, 0],
         avgY: worldY,
@@ -262,17 +498,57 @@ export function mergeParsedBlockIntoCompactSurface(
     }
 
     const idx = (col.localZ << 4) | col.localX;
+
+    // Independently track true natural terrain groundY across multi-block vertical columns
+    // (e.g. when blockY=1 contains only tree canopy or building roof, and blockY=0 contains ground)
+    if (blk.groundY) {
+      let resolvedGroundLocalY: number | undefined = col.groundLocalY;
+      if (resolvedGroundLocalY === undefined && isNaturalTerrainGroundNode(col.nodeName)) {
+        resolvedGroundLocalY = col.topLocalY;
+      }
+      if (resolvedGroundLocalY !== undefined && resolvedGroundLocalY >= 0) {
+        const worldGroundY = b.blockY * 16 + resolvedGroundLocalY;
+        if (worldGroundY >= minY && worldGroundY <= maxY && worldGroundY > blk.groundY[idx]) {
+          blk.groundY[idx] = worldGroundY;
+          modified = true;
+        }
+      }
+    }
+
     if (worldY >= blk.topY[idx]) {
+      const prevTopY = blk.topY[idx];
+      const prevWater = blk.waterDepth[idx];
       const color = resolveNodeColor(col.nodeName);
       const cOff = idx * 3;
       blk.rgb[cOff] = color[0];
       blk.rgb[cOff + 1] = color[1];
       blk.rgb[cOff + 2] = color[2];
       blk.topY[idx] = worldY;
-      blk.waterDepth[idx] = Math.min(255, col.waterCount);
+      blk.waterDepth[idx] = Math.min(255, col.waterCount + prevWater);
+
+      let extKind = classifyColumnExtrusionKind(col.nodeName);
+      if (extKind === 1) {
+        const span = col.contiguousSpan ?? 2;
+        const bottomLocalY = col.topLocalY - span + 1;
+        const bottomWorldY = b.blockY * 16 + bottomLocalY;
+        const hasCrossBlockAirGap = prevTopY > -32768 && bottomWorldY > prevTopY + 1;
+        if (
+          col.waterCount > 0 ||
+          prevWater > 0 ||
+          col.hasAirGapBelow ||
+          hasCrossBlockAirGap ||
+          (span < 2 && bottomLocalY > 0)
+        ) {
+          extKind = 0;
+        }
+      }
+      if (blk.extrusionKind) {
+        blk.extrusionKind[idx] = extKind;
+      }
       if (isPlayerStructuralNode(col.nodeName)) {
         blk.playerNodeCount = (blk.playerNodeCount || 0) + 1;
       }
+
       if (isBiomeGroundSurfaceNode(col.nodeName)) {
         blk.dominantNode = col.nodeName;
       } else if (
@@ -284,6 +560,152 @@ export function mergeParsedBlockIntoCompactSurface(
       }
       nodeCounts[col.nodeName] = (nodeCounts[col.nodeName] || 0) + 1;
       modified = true;
+    } else {
+      if (blk.waterDepth[idx] > 0 && col.waterCount > 0) {
+        // Accumulate multi-block water depth when decoding blockY = -1 under blockY = 0 ocean surface
+        blk.waterDepth[idx] = Math.min(255, blk.waterDepth[idx] + col.waterCount);
+        modified = true;
+      }
+      // If an upper block had a structural node (extKind === 1), but this lower block has water or
+      // an open air cavity at the top of the block (col.topLocalY < 15), clear the structural extrusion
+      // so suspended ship sails, overhangs, or arches over water/air never extrude into solid monolith walls.
+      if (
+        blk.extrusionKind &&
+        blk.extrusionKind[idx] === 1 &&
+        (col.waterCount > 0 || col.topLocalY < 15)
+      ) {
+        blk.extrusionKind[idx] = 0;
+        blk.playerNodeCount = Math.max(0, (blk.playerNodeCount || 1) - 1);
+      }
+    }
+
+    if (
+      blk.waterDepth[idx] > 0 &&
+      blk.groundY &&
+      blk.groundY[idx] > -32768 &&
+      blk.groundY[idx] < blk.topY[idx]
+    ) {
+      blk.waterDepth[idx] = Math.max(
+        blk.waterDepth[idx],
+        Math.min(255, blk.topY[idx] - blk.groundY[idx])
+      );
+    }
+
+    const isSelfContainedPlant =
+      col.trunkNodeName &&
+      !col.hasAirGapBelow &&
+      (col.trunkNodeName.includes('cactus') ||
+        col.trunkNodeName.includes('bamboo') ||
+        col.trunkNodeName.includes('sprout') ||
+        col.trunkNodeName.includes('coral_bones') ||
+        col.trunkNodeName.includes('crystal_tree') ||
+        col.trunkNodeName.includes('crystal_bush'));
+
+    const isGroundedTrunk =
+      col.trunkNodeName &&
+      !col.hasAirGapBelow &&
+      (col.groundLocalY !== undefined || isNaturalTerrainGroundNode(col.nodeName));
+
+    const isValidTreeRoot =
+      col.trunkNodeName &&
+      !col.hasAirGapBelow &&
+      (col.hasFoliage || isSelfContainedPlant || isGroundedTrunk) &&
+      !isPlayerStructuralNode(col.nodeName) &&
+      !isPlayerStructuralNode(col.trunkNodeName) &&
+      !(col.waterCount > 2 && (col.trunkLocalY ?? col.topLocalY) < col.topLocalY);
+
+    if (isValidTreeRoot && col.trunkNodeName) {
+      const saplingKey = resolveSaplingForNode(col.trunkNodeName);
+      if (saplingKey) {
+        const worldTrunkY = b.blockY * 16 + (col.trunkLocalY ?? col.topLocalY);
+        treeCandidates.push({ lx: col.localX, lz: col.localZ, y: worldTrunkY, saplingKey });
+      }
+    }
+  }
+
+  if (treeCandidates.length > 0 && blk) {
+    if (!blk.treeAnchors) blk.treeAnchors = [];
+
+    const isGiantSpecies = (key: string) =>
+      key.includes('coral_bones') ||
+      key.includes('sequoia') ||
+      key.includes('baobab') ||
+      key.includes('redwood') ||
+      key.includes('emergent') ||
+      key.includes('big_tree');
+
+    // Cluster proximate trunk columns of the same species into 1 tree centroid.
+    // Giant trees (8-15 blocks wide) use radius 5; standard flora use radius 3.
+    const clusters: Array<{
+      lxSum: number;
+      lzSum: number;
+      minY: number;
+      count: number;
+      saplingKey: string;
+    }> = [];
+
+    for (let cIdx = 0; cIdx < treeCandidates.length; cIdx++) {
+      const c = treeCandidates[cIdx];
+      const matchRadius = isGiantSpecies(c.saplingKey) ? 5 : 3;
+      let matchedCluster: (typeof clusters)[number] | null = null;
+      for (let clIdx = 0; clIdx < clusters.length; clIdx++) {
+        const cl = clusters[clIdx];
+        if (
+          cl.saplingKey === c.saplingKey &&
+          Math.abs(Math.round(cl.lxSum / cl.count) - c.lx) <= matchRadius &&
+          Math.abs(Math.round(cl.lzSum / cl.count) - c.lz) <= matchRadius
+        ) {
+          matchedCluster = cl;
+          break;
+        }
+      }
+      if (matchedCluster) {
+        matchedCluster.lxSum += c.lx;
+        matchedCluster.lzSum += c.lz;
+        matchedCluster.minY = Math.min(matchedCluster.minY, c.y);
+        matchedCluster.count++;
+      } else {
+        clusters.push({
+          lxSum: c.lx,
+          lzSum: c.lz,
+          minY: c.y,
+          count: 1,
+          saplingKey: c.saplingKey
+        });
+      }
+    }
+
+    for (let clIdx = 0; clIdx < clusters.length; clIdx++) {
+      const cl = clusters[clIdx];
+      const lx = Math.round(cl.lxSum / cl.count);
+      const lz = Math.round(cl.lzSum / cl.count);
+      const isGiantTree = isGiantSpecies(cl.saplingKey);
+      const mergeRadius = isGiantTree ? 5 : 3;
+      const scale = isGiantTree
+        ? cl.count >= 8
+          ? 2.0
+          : cl.count >= 4
+            ? 1.7
+            : 1.4
+        : cl.count >= 4
+          ? 1.4
+          : cl.count >= 2
+            ? 1.2
+            : 1.0;
+      const existingIdx = blk.treeAnchors.findIndex(
+        a => Math.abs(a.lx - lx) <= mergeRadius && Math.abs(a.lz - lz) <= mergeRadius
+      );
+      if (existingIdx >= 0) {
+        blk.treeAnchors[existingIdx] = {
+          lx,
+          lz,
+          y: Math.min(blk.treeAnchors[existingIdx].y, cl.minY),
+          saplingKey: cl.saplingKey,
+          scale: Math.max(blk.treeAnchors[existingIdx].scale ?? 1.0, scale)
+        };
+      } else {
+        blk.treeAnchors.push({ lx, lz, y: cl.minY, saplingKey: cl.saplingKey, scale });
+      }
     }
   }
 
@@ -294,6 +716,8 @@ export function mergeParsedBlockIntoCompactSurface(
   let sumG = 0;
   let sumB = 0;
   let sumY = 0;
+  let sumGroundY = 0;
+  let groundCount = 0;
   let sumWater = 0;
   let count = 0;
 
@@ -304,6 +728,10 @@ export function mergeParsedBlockIntoCompactSurface(
       sumG += blk.rgb[cOff + 1];
       sumB += blk.rgb[cOff + 2];
       sumY += blk.topY[i];
+      if (blk.groundY && blk.groundY[i] > -32768) {
+        sumGroundY += blk.groundY[i];
+        groundCount++;
+      }
       sumWater += blk.waterDepth[i];
       count++;
     }
@@ -315,7 +743,7 @@ export function mergeParsedBlockIntoCompactSurface(
       Math.round(sumG / count),
       Math.round(sumB / count)
     ];
-    blk.avgY = Math.round(sumY / count);
+    blk.avgY = groundCount > 0 ? Math.round(sumGroundY / groundCount) : Math.round(sumY / count);
     const avgWater = Math.round(sumWater / count);
 
     // 1. Store exact 1x1 MapBlock overview entry (never bleeds into adjacent unexplored blocks!)
@@ -504,6 +932,7 @@ export function parseAndMergeCoarseBlockMipmap(
   const startOffset = columnStride >= 4 ? 1 : 0;
 
   coarseScratchTopY.fill(-32768, 0, totalCells);
+  coarseScratchWater.fill(0, 0, totalCells);
 
   let dominantNode = 'air';
   let playerNodeCount = 0;
@@ -515,7 +944,10 @@ export function parseAndMergeCoarseBlockMipmap(
       const maxBlockWorldY = vItem.y * 16 + 15;
       let allCoveredAbove = true;
       for (let i = 0; i < totalCells; i++) {
-        if (coarseScratchTopY[i] <= maxBlockWorldY) {
+        if (
+          coarseScratchTopY[i] <= maxBlockWorldY ||
+          (coarseScratchWater[i] > 0 && coarseScratchWater[i] <= 2)
+        ) {
           allCoveredAbove = false;
           break;
         }
@@ -636,6 +1068,9 @@ export function parseAndMergeCoarseBlockMipmap(
             dominantNode = topNodeName;
           }
           nodeCounts[topNodeName] = (nodeCounts[topNodeName] || 0) + 1;
+          modified = true;
+        } else if (coarseScratchWater[cellIdx] > 0 && waterCount > 0) {
+          coarseScratchWater[cellIdx] = Math.min(255, coarseScratchWater[cellIdx] + waterCount);
           modified = true;
         }
       }
@@ -960,13 +1395,20 @@ function extractSurfaceColumnsFromParam0(
   caveMode: boolean
 ): ParsedMapBlockSummary['columns'] {
   const columns: ParsedMapBlockSummary['columns'] = [];
+  const foliageGrid = new Uint8Array(256);
 
   for (let lz = 0; lz < 16; lz++) {
     for (let lx = 0; lx < 16; lx++) {
       if (!caveMode) {
         let topLocalY = -1;
+        let groundLocalY = -1;
         let topNodeName = 'air';
         let waterCount = 0;
+        let contiguousSpan = 0;
+        let inTopContiguousRun = false;
+        let hasAirGapBelow = false;
+        let trunkNodeName: string | undefined;
+        let trunkLocalY: number | undefined;
 
         for (let ly = 15; ly >= 0; ly--) {
           const nodeIdx = (lz << 8) | (ly << 4) | lx;
@@ -975,21 +1417,43 @@ function extractSurfaceColumnsFromParam0(
           const name = nodeMapping[param0] || 'air';
 
           if (name === 'air' || name === 'ignore') {
+            if (topLocalY !== -1 && groundLocalY === -1 && name === 'air') {
+              inTopContiguousRun = false;
+              hasAirGapBelow = true;
+            }
             continue;
+          }
+          if (isTreeFoliageNode(name)) {
+            foliageGrid[(lz << 4) | lx] = 1;
+          }
+          if (isTreeTrunkNode(name) && trunkLocalY === undefined) {
+            trunkNodeName = name;
+            trunkLocalY = ly;
           }
           if (name.includes('water')) {
             waterCount++;
             if (topLocalY === -1) {
               topLocalY = ly;
               topNodeName = name;
+            } else if (groundLocalY === -1) {
+              inTopContiguousRun = false;
+              hasAirGapBelow = true;
             }
             continue;
           }
           if (topLocalY === -1) {
             topLocalY = ly;
             topNodeName = name;
+            contiguousSpan = 1;
+            inTopContiguousRun = true;
+          } else if (inTopContiguousRun && !isNaturalTerrainGroundNode(name)) {
+            contiguousSpan++;
           }
-          break;
+          if (groundLocalY === -1 && isNaturalTerrainGroundNode(name)) {
+            groundLocalY = ly;
+            inTopContiguousRun = false;
+            break;
+          }
         }
 
         if (topLocalY !== -1) {
@@ -997,8 +1461,13 @@ function extractSurfaceColumnsFromParam0(
             localX: lx,
             localZ: lz,
             topLocalY,
+            groundLocalY: groundLocalY !== -1 ? groundLocalY : undefined,
+            contiguousSpan,
+            hasAirGapBelow,
             nodeName: topNodeName,
-            waterCount
+            waterCount,
+            trunkNodeName,
+            trunkLocalY
           });
         }
       } else {
@@ -1049,6 +1518,7 @@ function extractSurfaceColumnsFromParam0(
             localX: lx,
             localZ: lz,
             topLocalY: floorLocalY,
+            groundLocalY: floorLocalY,
             nodeName: floorNodeName,
             waterCount
           });
@@ -1057,6 +1527,7 @@ function extractSurfaceColumnsFromParam0(
             localX: lx,
             localZ: lz,
             topLocalY: specialNodeY,
+            groundLocalY: specialNodeY,
             nodeName: specialNodeName,
             waterCount: 0
           });
@@ -1065,11 +1536,35 @@ function extractSurfaceColumnsFromParam0(
             localX: lx,
             localZ: lz,
             topLocalY: 0,
+            groundLocalY: 0,
             nodeName: 'default:cobble',
             waterCount: 0
           });
         }
       }
+    }
+  }
+
+  if (!caveMode) {
+    for (let i = 0; i < columns.length; i++) {
+      const col = columns[i];
+      if (!col.trunkNodeName) continue;
+      let hasFoliage = foliageGrid[(col.localZ << 4) | col.localX] === 1;
+      if (!hasFoliage) {
+        for (let dz = -2; dz <= 2 && !hasFoliage; dz++) {
+          const nz = col.localZ + dz;
+          if (nz < 0 || nz > 15) continue;
+          for (let dx = -2; dx <= 2; dx++) {
+            const nx = col.localX + dx;
+            if (nx < 0 || nx > 15) continue;
+            if (foliageGrid[(nz << 4) | nx] === 1) {
+              hasFoliage = true;
+              break;
+            }
+          }
+        }
+      }
+      col.hasFoliage = hasFoliage;
     }
   }
 
@@ -1196,11 +1691,13 @@ export function buildDemoWorldDatabase(
 
           const pt = synth.evaluatePoint(worldX, worldZ);
           let topY = pt.elevation;
+          let groundY = Math.max(1, pt.elevation);
           let nodeName = pt.biome.topNode;
           let waterDepth = 0;
 
           if (topY < 1) {
             waterDepth = 1 - topY;
+            groundY = topY;
             nodeName = pt.heat < 18 ? 'default:ice' : 'default:water_source';
             topY = 1;
           }
@@ -1210,7 +1707,9 @@ export function buildDemoWorldDatabase(
           if (Math.abs(worldX) <= 22 && Math.abs(worldZ) <= 22) {
             const ax = Math.abs(worldX);
             const az = Math.abs(worldZ);
-            topY = Math.max(topY, 14);
+            const baseFloorY = Math.max(topY, 14);
+            groundY = baseFloorY;
+            topY = baseFloorY;
             waterDepth = 0;
             if ((ax === 22 || az === 22) && (ax >= 18 || az >= 18)) {
               topY += 12;
@@ -1229,10 +1728,12 @@ export function buildDemoWorldDatabase(
             (Math.abs(worldZ) <= 2 && Math.abs(worldX) <= 160)
           ) {
             if (pt.elevation < 1) {
+              groundY = 2;
               topY = 3;
               waterDepth = 0;
               nodeName = 'default:wood';
             } else {
+              groundY = pt.elevation;
               topY = pt.elevation + 1;
               nodeName =
                 Math.abs(worldX) === 2 || Math.abs(worldZ) === 2
@@ -1243,13 +1744,15 @@ export function buildDemoWorldDatabase(
             const vx = worldX - 85;
             const vz = worldZ - 65;
             if (Math.abs(vx % 12) < 6 && Math.abs(vz % 12) < 6) {
+              groundY = Math.max(1, pt.elevation);
               topY = Math.max(4, pt.elevation + 5);
               waterDepth = 0;
               nodeName = 'default:wood';
             }
           } else if (distFromOrigin > 40 && Math.hypot(worldX + 95, worldZ + 80) <= 8) {
             const r = Math.hypot(worldX + 95, worldZ + 80);
-            topY = Math.max(8, pt.elevation) + Math.round((8 - r) * 3);
+            groundY = Math.max(8, pt.elevation);
+            topY = groundY + Math.round((8 - r) * 3);
             waterDepth = 0;
             nodeName = r < 2.5 ? 'default:meselamp' : 'default:brick';
           }
@@ -1264,12 +1767,35 @@ export function buildDemoWorldDatabase(
             waterDepth
           });
 
+          let trunkNodeName: string | undefined;
+          let trunkLocalY: number | undefined;
+          if (
+            (worldX % 9 === 4) &&
+            (worldZ % 9 === 4) &&
+            distFromOrigin > 32 &&
+            waterDepth === 0 &&
+            pt.elevation >= 2
+          ) {
+            trunkNodeName = pt.biome.topNode.includes('snow')
+              ? 'default:pine_tree'
+              : pt.biome.topNode.includes('sand')
+                ? 'default:cactus'
+                : 'default:tree';
+            trunkLocalY = topY;
+          }
+
           columns.push({
             localX: lx,
             localZ: lz,
             topLocalY: topY,
+            groundLocalY: groundY,
+            contiguousSpan: Math.max(1, topY - groundY),
+            hasAirGapBelow: false,
             nodeName,
-            waterCount: waterDepth
+            waterCount: waterDepth,
+            trunkNodeName,
+            trunkLocalY,
+            hasFoliage: trunkNodeName !== undefined
           });
         }
       }

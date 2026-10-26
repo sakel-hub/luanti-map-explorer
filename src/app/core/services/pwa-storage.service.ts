@@ -2,7 +2,8 @@ import { Injectable, signal } from '@angular/core';
 import {
   DiscoveredWorldRegion,
   MacroMipmapCell,
-  VerticalLayerSummary
+  VerticalLayerSummary,
+  WorldDatabaseBackend
 } from '../models/world.model';
 import { BiomeDefinition } from '../models/biome.model';
 import { safeGetItem, safeSetItem } from '../utils/storage.utils';
@@ -11,6 +12,7 @@ export interface CachedWorldMetadata {
   fileKey: string;
   fileName: string;
   fileSizeBytes: number;
+  databaseBackend?: WorldDatabaseBackend;
   totalBlocks: number;
   minBlockX: number;
   maxBlockX: number;
@@ -62,6 +64,7 @@ export const MAX_METADATA_ENTRIES = 10;
 export class PwaStorageService {
   private dbPromise: Promise<IDBDatabase | null> | null = null;
   private currentTileCacheBytes = 0;
+  private currentTileCacheCount = 0;
   private hasInitializedCacheBytes = false;
   private isPruning = false;
   private wakeLockSentinel: any = null;
@@ -69,9 +72,60 @@ export class PwaStorageService {
   public readonly isPersisted = signal<boolean>(false);
   public readonly quotaInfo = signal<StorageQuotaInfo | null>(null);
   public readonly recentWorld = signal<RecentWorldEntry | null>(null);
+  public readonly isOffline = signal<boolean>(
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
+  public readonly updateAvailable = signal<boolean>(false);
 
   constructor() {
+    this.initNetworkAndSwListeners();
     this.initStorage();
+  }
+
+  private initNetworkAndSwListeners(): void {
+    if (typeof window === 'undefined') return;
+
+    window.addEventListener('online', () => this.isOffline.set(false));
+    window.addEventListener('offline', () => this.isOffline.set(true));
+
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .getRegistration()
+        .then(reg => {
+          if (!reg) return;
+          if (reg.waiting) {
+            this.updateAvailable.set(true);
+          }
+          reg.addEventListener('updatefound', () => {
+            const installing = reg.installing;
+            if (!installing) return;
+            installing.addEventListener('statechange', () => {
+              if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                this.updateAvailable.set(true);
+              }
+            });
+          });
+        })
+        .catch(() => {
+          // Ignore service worker registration query errors
+        });
+    }
+  }
+
+  public async applyUpdate(): Promise<void> {
+    try {
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg?.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+      }
+    } catch {
+      // Ignore activation error and reload anyway
+    }
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
   }
 
   private async initStorage(): Promise<void> {
@@ -224,6 +278,7 @@ export class PwaStorageService {
         store.put(entry);
         tx.oncomplete = () => {
           this.currentTileCacheBytes += size;
+          this.currentTileCacheCount += 1;
           resolve();
         };
         tx.onerror = () => resolve();
@@ -262,6 +317,7 @@ export class PwaStorageService {
           cursor.continue();
         } else {
           this.currentTileCacheBytes = Math.max(0, this.currentTileCacheBytes - freedBytes);
+          this.currentTileCacheCount = Math.max(0, this.currentTileCacheCount - deletedCount);
         }
       };
 
@@ -288,6 +344,7 @@ export class PwaStorageService {
         store.clear();
         tx.oncomplete = () => {
           this.currentTileCacheBytes = 0;
+          this.currentTileCacheCount = 0;
           resolve();
         };
         tx.onerror = () => resolve();
@@ -318,6 +375,7 @@ export class PwaStorageService {
             cursor.continue();
           } else {
             this.currentTileCacheBytes = totalBytes;
+            this.currentTileCacheCount = count;
             this.hasInitializedCacheBytes = true;
             resolve({ count, totalBytes });
           }
@@ -508,7 +566,7 @@ export class PwaStorageService {
 
   public async refreshStorageQuota(): Promise<StorageQuotaInfo> {
     const stats = this.hasInitializedCacheBytes
-      ? { count: 0, totalBytes: this.currentTileCacheBytes }
+      ? { count: this.currentTileCacheCount, totalBytes: this.currentTileCacheBytes }
       : await this.getTileCacheStats();
 
     let usageBytes = stats.totalBytes;

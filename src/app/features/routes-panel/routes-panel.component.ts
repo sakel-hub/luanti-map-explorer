@@ -9,8 +9,12 @@ import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { TooltipDirective } from '../../shared/directives/tooltip.directive';
 import {
   LucideArrowUpDown,
+  LucideCheck,
   LucideClock,
   LucideCompass,
+  LucideCopy,
+  LucideCornerUpLeft,
+  LucideCornerUpRight,
   LucideCrosshair,
   LucideDroplet,
   LucideFlame,
@@ -60,7 +64,11 @@ import {
     LucideDroplet,
     LucideFlame,
     LucideSliders,
-    LucideTrash2
+    LucideTrash2,
+    LucideCheck,
+    LucideCopy,
+    LucideCornerUpLeft,
+    LucideCornerUpRight
   ],
   template: `
     <div
@@ -195,7 +203,7 @@ import {
                 type="button"
                 (click)="setStartToSpawn()"
                 class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] transition">
-                Spawn (0, 0)
+                {{ 'routes.spawnBtn' | translate }}
               </button>
               <button
                 type="button"
@@ -207,7 +215,7 @@ import {
                 [appTooltip]="'routes.pickOnMapHint' | translate"
                 class="px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 transition">
                 <svg lucideCrosshair class="w-3 h-3"></svg>
-                <span>{{ routePlanner.pickingTarget() === 'start' ? 'Click Map...' : ('routes.pickOnMap' | translate) }}</span>
+                <span>{{ (routePlanner.pickingTarget() === 'start' ? 'routes.clickMapBtn' : 'routes.pickOnMap') | translate }}</span>
               </button>
             </div>
           </div>
@@ -258,7 +266,7 @@ import {
                 type="button"
                 (click)="setDestToCursor()"
                 class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] transition">
-                Cursor
+                {{ 'routes.cursorBtn' | translate }}
               </button>
               <button
                 type="button"
@@ -270,7 +278,7 @@ import {
                 [appTooltip]="'routes.pickOnMapHint' | translate"
                 class="px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 transition">
                 <svg lucideCrosshair class="w-3 h-3"></svg>
-                <span>{{ routePlanner.pickingTarget() === 'dest' ? 'Click Map...' : ('routes.pickOnMap' | translate) }}</span>
+                <span>{{ (routePlanner.pickingTarget() === 'dest' ? 'routes.clickMapBtn' : 'routes.pickOnMap') | translate }}</span>
               </button>
             </div>
           </div>
@@ -399,19 +407,19 @@ import {
                   type="button"
                   (click)="routePlanner.setMiningDepth(-15)"
                   class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[9px] text-slate-300">
-                  Shallow (-15)
+                  {{ 'routes.depthShallow' | translate }}
                 </button>
                 <button
                   type="button"
                   (click)="routePlanner.setMiningDepth(-50)"
                   class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[9px] text-slate-300">
-                  Deep Ore (-50)
+                  {{ 'routes.depthDeepOre' | translate }}
                 </button>
                 <button
                   type="button"
                   (click)="routePlanner.setMiningDepth(-120)"
                   class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[9px] text-slate-300">
-                  Abyss (-120)
+                  {{ 'routes.depthAbyss' | translate }}
                 </button>
               </div>
             </div>
@@ -587,7 +595,11 @@ import {
               (click)="copyTeleport()"
               [appTooltip]="'Copy in-game /teleport destination command to clipboard'"
               class="py-1.5 px-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-semibold text-[11px] flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer">
-              <svg [attr.lucideCheck]="copiedTeleport() ? true : null" [attr.lucideCopy]="!copiedTeleport() ? true : null" class="w-3.5 h-3.5"></svg>
+              @if (copiedTeleport()) {
+                <svg lucideCheck class="w-3.5 h-3.5 text-emerald-400"></svg>
+              } @else {
+                <svg lucideCopy class="w-3.5 h-3.5"></svg>
+              }
               <span>{{ copiedTeleport() ? ('routes.copyTeleportDone' | translate) : ('routes.copyTeleport' | translate) }}</span>
             </button>
 
@@ -596,7 +608,11 @@ import {
               (click)="copyWaypoint()"
               [appTooltip]="'Copy /waypoint add console command for compass & navigation mods'"
               class="py-1.5 px-2 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 font-semibold text-[11px] flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer">
-              <svg [attr.lucideCheck]="copiedWaypoint() ? true : null" [attr.lucideCopy]="!copiedWaypoint() ? true : null" class="w-3.5 h-3.5"></svg>
+              @if (copiedWaypoint()) {
+                <svg lucideCheck class="w-3.5 h-3.5 text-emerald-400"></svg>
+              } @else {
+                <svg lucideCopy class="w-3.5 h-3.5"></svg>
+              }
               <span>{{ copiedWaypoint() ? ('routes.copyWaypointDone' | translate) : ('routes.copyWaypoint' | translate) }}</span>
             </button>
           </div>
@@ -625,6 +641,10 @@ import {
                       <svg lucidePickaxe class="w-3 h-3 text-amber-400"></svg>
                     } @else if (step.icon === 'finish') {
                       <svg lucideMapPin class="w-3 h-3 text-rose-400"></svg>
+                    } @else if (step.icon === 'turn-left') {
+                      <svg lucideCornerUpLeft class="w-3 h-3 text-sky-400"></svg>
+                    } @else if (step.icon === 'turn-right') {
+                      <svg lucideCornerUpRight class="w-3 h-3 text-sky-400"></svg>
                     } @else {
                       <svg lucideNavigation class="w-3 h-3 text-sky-400"></svg>
                     }
@@ -654,7 +674,7 @@ import {
               type="button"
               (click)="planDemoRoute()"
               class="py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md transition active:scale-95 cursor-pointer">
-              Try Sample Route
+              {{ 'routes.trySampleRoute' | translate }}
             </button>
           </div>
         </div>

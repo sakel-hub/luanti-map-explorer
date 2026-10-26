@@ -42,3 +42,16 @@ export function safeRemoveItem(key: string): boolean {
   }
   return false;
 }
+
+export function safeClearStorage(): void {
+  inMemoryFallback.clear();
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.clear();
+    }
+  } catch {
+    // Storage access denied
+  }
+}
+
+
