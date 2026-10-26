@@ -1,0 +1,53 @@
+{
+  "name": "luanti-map-explorer",
+  "version": "1.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "serve:pwa": "ng build && npx http-server dist/luanti-map-explorer/browser -p 8080 -c-1",
+    "watch": "ng build --watch --configuration development",
+    "test": "vitest run",
+    "generate:sample-world": "node scripts/generate-sample-world.mjs"
+  },
+  "private": true,
+  "license": "MIT",
+  "packageManager": "npm@11.13.0",
+  "dependencies": {
+    "@angular/common": "^22.2.0",
+    "@angular/compiler": "^22.2.0",
+    "@angular/core": "^22.2.0",
+    "@angular/forms": "^22.2.0",
+    "@angular/platform-browser": "^22.2.0",
+    "@angular/router": "^22.2.0",
+    "@angular/service-worker": "^22.2.0",
+    "@lucide/angular": "^1.61.0",
+    "d3-delaunay": "^6.0.4",
+    "fzstd": "^0.1.1",
+    "maplibre-gl": "^5.2.0",
+    "pako": "^2.1.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.2.4",
+    "@angular/cli": "^22.2.4",
+    "@angular/compiler-cli": "^22.2.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/d3-delaunay": "^6.0.4",
+    "@types/pako": "^2.0.3",
+    "@types/sql.js": "^1.4.9",
+    "autoprefixer": "^10.6.1",
+    "jsdom": "^30.0.0",
+    "postcss": "^8.5.31",
+    "prettier": "^3.8.1",
+    "sql.js": "^1.13.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  }
+}

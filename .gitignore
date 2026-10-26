@@ -1,0 +1,61 @@
+# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# Compiled output
+/dist
+/tmp
+/out-tsc
+/bazel-out
+
+# Node
+/node_modules
+npm-debug.log
+yarn-error.log
+
+# IDEs and editors
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Visual Studio Code
+.vscode/
+.history/
+
+# AI Assistants and Agent Workspaces
+.agents/
+.gemini/
+.claude/
+.cursor/
+.cursorrules
+.cline/
+.roo/
+.continue/
+.copilot/
+.aider*
+*.system_generated
+.system_generated/
+
+# Miscellaneous
+/.angular/cache
+.sass-cache/
+/connect.lock
+/coverage
+/libpeerconnection.log
+testem.log
+/typings
+__screenshots__/
+build.log
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
+/Library/
+
+# Local environment / cache
+.npm/
+.angular-config.json
+node_modules
