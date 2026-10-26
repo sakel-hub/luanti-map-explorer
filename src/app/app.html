@@ -1,0 +1,291 @@
+<div class="flex flex-col h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 font-sans relative">
+  <!-- Top App Navigation & Actions -->
+  <app-header
+    (openHelp)="showHelpModal.set(true)"
+    (openShare)="showShareModal.set(true)" />
+
+  <!-- Main Center Workspace Grid -->
+  <div class="flex-1 flex min-h-0 overflow-hidden relative">
+    <!-- Left Panel: World Folder, Seed & Layer Controls (Desktop only) -->
+    <aside
+      [style.width.px]="leftWidth()"
+      class="hidden lg:flex flex-col flex-shrink-0 h-full min-h-0 overflow-hidden">
+      <app-world-panel class="flex-1 min-h-0 h-full" />
+    </aside>
+
+    <!-- Left Resizing Splitter Bar (Desktop only) -->
+    <div
+      role="separator"
+      tabindex="0"
+      aria-orientation="vertical"
+      aria-label="Resize left world controls panel"
+      [attr.aria-valuenow]="leftWidth()"
+      (mousedown)="startLeftResize($event)"
+      (touchstart)="startLeftResizeTouch($event)"
+      (keydown)="onResizeKeydown('left', $event)"
+      [appTooltip]="'Drag left/right (or use Arrow keys) to resize world controls'"
+      class="hidden lg:flex w-1.5 h-full bg-slate-900 hover:bg-sky-500 active:bg-sky-400 focus:bg-sky-500 focus:outline-none cursor-col-resize items-center justify-center transition-colors group flex-shrink-0 z-10 border-x border-slate-800/80">
+      <div class="w-0.5 h-8 rounded-full bg-slate-700 group-hover:bg-white transition-colors"></div>
+    </div>
+
+    <!-- Center Panel: MapLibre GL JS 2D/3D Topographic Map Viewport -->
+    <main class="flex-1 h-full min-w-0 min-h-0 relative">
+      <app-map-viewport />
+    </main>
+
+    <!-- Right Resizing Splitter Bar (Desktop only) -->
+    <div
+      role="separator"
+      tabindex="0"
+      aria-orientation="vertical"
+      aria-label="Resize right Voronoi, Inspector, and Markers panel"
+      [attr.aria-valuenow]="rightWidth()"
+      (mousedown)="startRightResize($event)"
+      (touchstart)="startRightResizeTouch($event)"
+      (keydown)="onResizeKeydown('right', $event)"
+      [appTooltip]="'Drag left/right (or use Arrow keys) to resize right sidebar panel'"
+      class="hidden lg:flex w-1.5 h-full bg-slate-900 hover:bg-sky-500 active:bg-sky-400 focus:bg-sky-500 focus:outline-none cursor-col-resize items-center justify-center transition-colors group flex-shrink-0 z-10 border-x border-slate-800/80">
+      <div class="w-0.5 h-8 rounded-full bg-slate-700 group-hover:bg-white transition-colors"></div>
+    </div>
+
+    <!-- Right Panel: Interactive Voronoi Matrix, Coordinate/DB Inspector & Custom Map Markers (Desktop only) -->
+    <aside
+      [style.width.px]="rightWidth()"
+      class="hidden lg:flex flex-shrink-0 h-full min-h-0 flex-col bg-slate-900 overflow-hidden">
+      <!-- Right Sidebar Tab Bar -->
+      <div
+        role="tablist"
+        aria-label="Analysis and Markers tabs"
+        class="h-9 bg-slate-950 flex border-b border-slate-800 text-xs px-1.5 flex-shrink-0">
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="activeRightTab() === 'voronoi'"
+          (click)="activeRightTab.set('voronoi')"
+          [class.border-b-2]="activeRightTab() === 'voronoi'"
+          [class.border-sky-500]="activeRightTab() === 'voronoi'"
+          [class.text-sky-400]="activeRightTab() === 'voronoi'"
+          [class.text-slate-400]="activeRightTab() !== 'voronoi'"
+          [appTooltip]="'voronoi.subtitle' | translate"
+          class="flex-1 font-semibold flex items-center justify-center gap-1 transition truncate px-1">
+          <svg lucideCrosshair class="w-3.5 h-3.5 flex-shrink-0"></svg>
+          <span class="truncate">{{ 'voronoi.title' | translate }}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="activeRightTab() === 'inspector'"
+          (click)="activeRightTab.set('inspector')"
+          [class.border-b-2]="activeRightTab() === 'inspector'"
+          [class.border-sky-500]="activeRightTab() === 'inspector'"
+          [class.text-sky-400]="activeRightTab() === 'inspector'"
+          [class.text-slate-400]="activeRightTab() !== 'inspector'"
+          [appTooltip]="'Coordinate telemetry, elevation cross-section & SQLite node statistics'"
+          class="flex-1 font-semibold flex items-center justify-center gap-1 transition truncate px-1">
+          <svg lucideDatabase class="w-3.5 h-3.5 flex-shrink-0"></svg>
+          <span class="truncate">{{ 'inspector.title' | translate }}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="activeRightTab() === 'markers'"
+          (click)="activeRightTab.set('markers')"
+          [class.border-b-2]="activeRightTab() === 'markers'"
+          [class.border-rose-500]="activeRightTab() === 'markers'"
+          [class.text-rose-400]="activeRightTab() === 'markers'"
+          [class.text-slate-400]="activeRightTab() !== 'markers'"
+          [appTooltip]="'markers.subtitle' | translate"
+          class="flex-1 font-semibold flex items-center justify-center gap-1 transition truncate px-1">
+          <svg lucideMapPin class="w-3.5 h-3.5 flex-shrink-0"></svg>
+          <span class="truncate">{{ 'markers.title' | translate }}</span>
+          <span class="px-1 py-0.2 rounded-full bg-slate-800 text-[9px] font-mono text-slate-300">
+            {{ mapStore.markers().length }}
+          </span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="activeRightTab() === 'routes'"
+          (click)="activeRightTab.set('routes')"
+          [class.border-b-2]="activeRightTab() === 'routes'"
+          [class.border-emerald-500]="activeRightTab() === 'routes'"
+          [class.text-emerald-400]="activeRightTab() === 'routes'"
+          [class.text-slate-400]="activeRightTab() !== 'routes'"
+          [appTooltip]="'routes.subtitle' | translate"
+          class="flex-1 font-semibold flex items-center justify-center gap-1 transition truncate px-1">
+          <svg lucideRoute class="w-3.5 h-3.5 flex-shrink-0"></svg>
+          <span class="truncate">{{ 'routes.title' | translate }}</span>
+        </button>
+      </div>
+
+      <!-- Right Tab Content -->
+      <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
+        @if (activeRightTab() === 'voronoi') {
+          <app-voronoi-panel class="flex-1 min-h-0 h-full" />
+        } @else if (activeRightTab() === 'inspector') {
+          <app-inspector-panel class="flex-1 min-h-0 h-full" />
+        } @else if (activeRightTab() === 'markers') {
+          <app-markers-panel class="flex-1 min-h-0 h-full" />
+        } @else {
+          <app-routes-panel class="flex-1 min-h-0 h-full" />
+        }
+      </div>
+    </aside>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MOBILE SHEET DRAWER MODAL (< lg)           -->
+  <!-- ========================================== -->
+  @if (mobileSheetTab() !== 'none') {
+    <!-- Backdrop with click-to-dismiss -->
+    <div
+      (click)="closeMobileSheet()"
+      class="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-30 transition-opacity"></div>
+
+    <!-- Sheet Container -->
+    <div
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="mobileSheetTitle()"
+      class="lg:hidden fixed inset-x-0 bottom-14 max-h-[82vh] h-[78vh] bg-slate-900 border-t border-slate-700/80 rounded-t-2xl shadow-2xl z-40 flex flex-col animate-sheet-up overflow-hidden pb-safe">
+      <!-- Sheet Handle & Header Bar -->
+      <div class="pt-2 px-4 pb-2 bg-slate-950/95 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
+          <span class="font-bold text-sm text-slate-100 capitalize">{{ mobileSheetTitle() }}</span>
+        </div>
+
+        <div class="w-10 h-1 rounded-full bg-slate-700"></div>
+
+        <button
+          (click)="closeMobileSheet()"
+          aria-label="Close panel"
+          class="w-8 h-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition">
+          <svg lucideX class="w-5 h-5"></svg>
+        </button>
+      </div>
+
+      <!-- Sheet Content Body (Scrollable) -->
+      <div class="flex-1 overflow-y-auto min-h-0 bg-slate-900">
+        @if (mobileSheetTab() === 'world') {
+          <app-world-panel />
+        }
+        @if (mobileSheetTab() === 'voronoi') {
+          <app-voronoi-panel />
+        }
+        @if (mobileSheetTab() === 'inspector') {
+          <app-inspector-panel />
+        }
+        @if (mobileSheetTab() === 'markers') {
+          <app-markers-panel />
+        }
+        @if (mobileSheetTab() === 'routes') {
+          <app-routes-panel />
+        }
+      </div>
+    </div>
+  }
+
+  <!-- ========================================== -->
+  <!-- MOBILE BOTTOM NAVIGATION DOCK (< lg)       -->
+  <!-- ========================================== -->
+  <nav
+    aria-label="Mobile workspace navigation"
+    class="flex lg:hidden h-14 bg-slate-950 border-t border-slate-800 px-1 items-center justify-around text-[10px] select-none z-30 pb-safe flex-shrink-0">
+    <!-- 1. Map View (Full Canvas) -->
+    <button
+      (click)="openMobileTab('none')"
+      [class.text-sky-400]="mobileSheetTab() === 'none'"
+      [class.text-slate-400]="mobileSheetTab() !== 'none'"
+      aria-label="World Map Viewport"
+      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+      <svg lucideMap class="w-5 h-5"></svg>
+      <span>Map View</span>
+    </button>
+
+    <!-- 2. World & Seed -->
+    <button
+      (click)="openMobileTab('world')"
+      [class.text-sky-400]="mobileSheetTab() === 'world'"
+      [class.text-slate-400]="mobileSheetTab() !== 'world'"
+      aria-label="World and Seed Controls"
+      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+      <svg lucideCompass class="w-5 h-5"></svg>
+      <span>World &amp; Seed</span>
+    </button>
+
+    <!-- 3. Voronoi Matrix -->
+    <button
+      (click)="openMobileTab('voronoi')"
+      [class.text-sky-400]="mobileSheetTab() === 'voronoi'"
+      [class.text-slate-400]="mobileSheetTab() !== 'voronoi'"
+      aria-label="Interactive Voronoi Matrix"
+      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+      <svg lucideCrosshair class="w-5 h-5"></svg>
+      <span>{{ 'voronoi.title' | translate }}</span>
+    </button>
+
+    <!-- 4. Inspector & DB -->
+    <button
+      (click)="openMobileTab('inspector')"
+      [class.text-sky-400]="mobileSheetTab() === 'inspector'"
+      [class.text-slate-400]="mobileSheetTab() !== 'inspector'"
+      aria-label="Coordinates and SQLite DB Inspector"
+      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+      <svg lucideDatabase class="w-5 h-5"></svg>
+      <span>{{ 'inspector.title' | translate }}</span>
+    </button>
+
+    <!-- 5. Custom Map Markers -->
+    <button
+      (click)="openMobileTab('markers')"
+      [class.text-rose-400]="mobileSheetTab() === 'markers'"
+      [class.text-slate-400]="mobileSheetTab() !== 'markers'"
+      aria-label="Custom Map Markers"
+      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+      <svg lucideMapPin class="w-5 h-5"></svg>
+      <span>{{ 'markers.title' | translate }}</span>
+    </button>
+
+    <!-- 6. Route Planner -->
+    <button
+      (click)="openMobileTab('routes')"
+      [class.text-emerald-400]="mobileSheetTab() === 'routes'"
+      [class.text-slate-400]="mobileSheetTab() !== 'routes'"
+      aria-label="Route Planner"
+      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+      <svg lucideRoute class="w-5 h-5"></svg>
+      <span>{{ 'routes.title' | translate }}</span>
+    </button>
+  </nav>
+
+  <!-- Keyboard Shortcuts Cheat Sheet Dialog -->
+  <app-shortcuts-dialog />
+
+  <!-- Help & Quick Guide Dialog -->
+  @if (showHelpModal()) {
+    <app-help-dialog (close)="showHelpModal.set(false)" />
+  }
+
+  <!-- Social Share Dialog -->
+  @if (showShareModal()) {
+    <app-share-dialog (close)="showShareModal.set(false)" />
+  }
+
+  <!-- Active Drag Overlay (prevents pointer capture loss during splitter resize) -->
+  @if (activeDrag()) {
+    <div class="fixed inset-0 z-50 cursor-col-resize select-none"></div>
+  }
+
+  <!-- Full-Screen Drag & Drop Overlay for map.sqlite or Luanti World Folders -->
+  @if (isWindowFileDragOver()) {
+    <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm border-4 border-dashed border-emerald-400 flex items-center justify-center pointer-events-none">
+      <div class="p-8 rounded-2xl bg-slate-900/95 border border-emerald-500/50 shadow-2xl text-center space-y-2 max-w-md">
+        <div class="text-lg font-bold text-emerald-300">Drop Luanti World or map.sqlite</div>
+        <p class="text-xs text-slate-300">
+          Drop <code class="text-emerald-400 font-mono">map.sqlite</code>, <code class="text-sky-400 font-mono">map_meta.txt</code>, <code class="text-sky-400 font-mono">world.mt</code>, or an entire world folder from Finder to render in 3D.
+        </p>
+      </div>
+    </div>
+  }
+</div>

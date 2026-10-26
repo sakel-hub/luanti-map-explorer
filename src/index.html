@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <title>Luanti Map &amp; Biome Explorer – Seed Generator, Voronoi Matrix &amp; SQLite World Viewer</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite map.sqlite world viewer for Luanti and Minetest." />
+    <meta name="keywords" content="luanti, minetest, map explorer, seed generator, voronoi diagram, amidst for minetest, minetestmapper, map.sqlite, biome finder, 3d terrain, mapgen v7" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="application-name" content="Luanti Map Explorer" />
+
+    <!-- Canonical & Language Alternates (Hreflang) -->
+    <link rel="canonical" href="https://sakel-hub.github.io/luanti-map-explorer/" />
+    <link rel="alternate" hreflang="x-default" href="https://sakel-hub.github.io/luanti-map-explorer/" />
+    <link rel="alternate" hreflang="en" href="https://sakel-hub.github.io/luanti-map-explorer/" />
+    <link rel="alternate" hreflang="de" href="https://sakel-hub.github.io/luanti-map-explorer/?lang=de" />
+    <link rel="alternate" hreflang="es" href="https://sakel-hub.github.io/luanti-map-explorer/?lang=es" />
+    <link rel="alternate" hreflang="fr" href="https://sakel-hub.github.io/luanti-map-explorer/?lang=fr" />
+    <link rel="alternate" hreflang="ru" href="https://sakel-hub.github.io/luanti-map-explorer/?lang=ru" />
+    <link rel="alternate" hreflang="sk" href="https://sakel-hub.github.io/luanti-map-explorer/?lang=sk" />
+
+    <!-- Icons & Manifest -->
+    <link rel="icon" type="image/svg+xml" href="logo.svg" />
+    <link rel="manifest" href="manifest.webmanifest" />
+
+    <!-- OpenGraph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Luanti Map &amp; Biome Explorer" />
+    <meta property="og:title" content="Luanti Map &amp; Biome Explorer – Seed Generator, Voronoi Matrix &amp; SQLite World Viewer" />
+    <meta property="og:description" content="Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite map.sqlite world viewer for Luanti and Minetest." />
+    <meta property="og:url" content="https://sakel-hub.github.io/luanti-map-explorer/" />
+    <meta property="og:image" content="https://sakel-hub.github.io/luanti-map-explorer/logo.svg" />
+    <meta property="og:image:secure_url" content="https://sakel-hub.github.io/luanti-map-explorer/logo.svg" />
+    <meta property="og:image:type" content="image/svg+xml" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Luanti Map and Biome Explorer Interface with 3D Terrain and Voronoi Matrix" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="de_DE" />
+    <meta property="og:locale:alternate" content="es_ES" />
+    <meta property="og:locale:alternate" content="fr_FR" />
+    <meta property="og:locale:alternate" content="ru_RU" />
+    <meta property="og:locale:alternate" content="sk_SK" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Luanti Map &amp; Biome Explorer – Seed Generator, Voronoi Matrix &amp; SQLite World Viewer" />
+    <meta name="twitter:description" content="Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite map.sqlite world viewer for Luanti and Minetest." />
+    <meta name="twitter:image" content="https://sakel-hub.github.io/luanti-map-explorer/logo.svg" />
+    <meta name="twitter:image:alt" content="Luanti Map and Biome Explorer Interface with 3D Terrain and Voronoi Matrix" />
+
+    <!-- Schema.org JSON-LD -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebApplication",
+            "@id": "https://sakel-hub.github.io/luanti-map-explorer/#webapp",
+            "name": "Luanti Map & Biome Explorer",
+            "url": "https://sakel-hub.github.io/luanti-map-explorer/",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "All",
+            "softwareVersion": "1.0.0",
+            "inLanguage": ["en", "sk", "de", "fr", "es", "ru"],
+            "description": "Interactive seed biome generator, real-time Heat/Humidity Voronoi diagram inspector, 3D topographic relief map, and SQLite map.sqlite world viewer for Luanti and Minetest.",
+            "browserRequirements": "Requires WebGL support",
+            "featureList": [
+              "Procedural Seed & Biome Map Synthesis (Mapgen v7, Valleys, Carpathian, Flat)",
+              "Interactive 2D Heat vs. Humidity Voronoi Matrix with Live Cursor Crosshair Synchronization",
+              "Direct Local Luanti World Directory Ingestion (world.mt, map_meta.txt, map.sqlite)",
+              "Zero-Server SQLite MapBlock Decoder (zstd & zlib Decompression, 64-bit Block Unpacking)",
+              "MapLibre GL JS 3D Topographic Terrain-RGB Elevation & Dynamic Hillshading",
+              "Multi-Core Web Worker Pool for 60 FPS Asynchronous Tile Rendering",
+              "Custom Map Markers, Player Base Discovery & Luanti Waypoints Export/Import"
+            ],
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "author": {
+              "@type": "Organization",
+              "name": "sakel-hub",
+              "url": "https://github.com/sakel-hub"
+            }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://sakel-hub.github.io/luanti-map-explorer/#website",
+            "url": "https://sakel-hub.github.io/luanti-map-explorer/",
+            "name": "Luanti Map & Biome Explorer",
+            "description": "Online seed biome explorer, Voronoi diagram inspector, and SQLite world mapper for Luanti and Minetest.",
+            "inLanguage": "en-US"
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body class="bg-slate-950 text-slate-100 antialiased overflow-hidden select-none">
+    <app-root>
+      <!-- Semantic Static Pre-Render Fallback & Loading Screen for Crawlers & Users -->
+      <div class="fixed inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-100 p-6 z-50">
+        <header class="text-center max-w-2xl mb-8">
+          <div class="flex items-center justify-center gap-3 mb-4">
+            <img src="logo.svg" alt="Luanti Map &amp; Biome Explorer Logo" width="56" height="56" class="w-14 h-14 rounded-xl shadow-lg" />
+            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+              Luanti Map &amp; Biome Explorer
+            </h1>
+          </div>
+          <p class="text-sm sm:text-base text-slate-300 leading-relaxed">
+            The modern, accessible, open-source Seed Biome Generator, Interactive Voronoi Inspector, and SQLite World Map Viewer for
+            <strong>Luanti</strong> (formerly Minetest) players, server administrators, and mod developers.
+          </p>
+        </header>
+
+        <!-- Loading Indicator for Human Visitors -->
+        <div class="flex flex-col items-center gap-3 my-4">
+          <div class="w-8 h-8 border-3 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+          <span class="text-xs text-slate-400 font-medium">Initializing WebGL Map &amp; Voronoi Worker Pool...</span>
+        </div>
+
+        <!-- Semantic Feature Overview for Search Engine Crawlers -->
+        <main class="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-400 mt-6 overflow-hidden">
+          <section class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+            <h2 class="text-sm font-semibold text-sky-400 mb-1.5">Procedural Seed &amp; Biome Synthesis</h2>
+            <p>
+              Preview infinite Luanti worlds directly from any seed (similar to Amidst for Minetest).
+              Evaluates authentic 2D/3D Octave Perlin Noise fields for terrain elevation, heat, and humidity
+              with support for Mapgen v7, Valleys, Carpathian, and Flat parameters.
+            </p>
+          </section>
+
+          <section class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+            <h2 class="text-sm font-semibold text-emerald-400 mb-1.5">Interactive Heat/Humidity Voronoi Matrix</h2>
+            <p>
+              Inspect the exact mathematical Voronoi tessellation that governs Luanti biome distribution.
+              Features a live synchronized crosshair that tracks your map cursor across Heat (0–100) and
+              Humidity (0–100) cells, with one-click biome isolation and altitude band filtering.
+            </p>
+          </section>
+
+          <section class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+            <h2 class="text-sm font-semibold text-purple-400 mb-1.5">Local World Folder &amp; SQLite DB Reader</h2>
+            <p>
+              Point directly to any local Luanti world folder to automatically parse <code>world.mt</code>,
+              <code>map_meta.txt</code>, and <code>map.sqlite</code>. Decodes 64-bit packed block coordinates
+              and decompresses zstd/zlib MapBlock blobs to render player builds and explored terrain.
+            </p>
+          </section>
+
+          <section class="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+            <h2 class="text-sm font-semibold text-amber-400 mb-1.5">3D Topographic Relief &amp; Web Worker Pool</h2>
+            <p>
+              Powered by MapLibre GL JS and a multi-core Web Worker pool. Toggle 3D Terrain-RGB elevation,
+              dynamic hillshading, Voronoi cell contour borders, and MapBlock (16×16) / MapChunk (80×80)
+              coordinate grids at a fluid 60 FPS.
+            </p>
+          </section>
+        </main>
+
+        <footer class="mt-8 text-center text-xs text-slate-500 flex flex-wrap items-center justify-center gap-4">
+          <a href="https://github.com/sakel-hub/luanti-map-explorer" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-sky-400 underline transition">
+            GitHub Repository &amp; Source Code
+          </a>
+          <span>•</span>
+          <a href="https://www.luanti.org" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-sky-400 underline transition">
+            Luanti Official Website
+          </a>
+          <span>•</span>
+          <a href="https://sakel-hub.github.io/luanti-nodebox-studio/" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-sky-400 underline transition">
+            Luanti NodeBox Studio
+          </a>
+        </footer>
+      </div>
+    </app-root>
+
+    <noscript>
+      <div class="fixed inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-100 p-8 text-center z-50">
+        <h2 class="text-xl font-bold mb-2">JavaScript Required for Map &amp; Voronoi Visualization</h2>
+        <p class="text-sm text-slate-400 max-w-md mb-4">
+          Luanti Map &amp; Biome Explorer requires JavaScript, Web Workers, and WebGL to compute Perlin noise, render Voronoi diagrams, and parse SQLite world databases.
+        </p>
+        <a href="https://github.com/sakel-hub/luanti-map-explorer" rel="noopener noreferrer" class="text-xs text-sky-400 underline">
+          Learn more on GitHub
+        </a>
+      </div>
+    </noscript>
+  </body>
+</html>

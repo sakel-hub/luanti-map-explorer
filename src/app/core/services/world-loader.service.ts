@@ -598,6 +598,8 @@ export class WorldLoaderService {
       this.mapStore.applyLoadedWorld(partialConfig, decodedDb);
 
       if (decodedDb) {
+        this.isOfflineCachedWorld.set(false);
+        this.canResumeFileHandle.set(null);
         const regionsCount = decodedDb.discoveredRegions?.length || 1;
         const modBiomesCount = decodedDb.discoveredModBiomes?.length || 0;
         if (!isAutoRestore) {
