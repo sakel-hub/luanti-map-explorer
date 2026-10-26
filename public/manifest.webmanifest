@@ -1,0 +1,36 @@
+{
+  "name": "Luanti Map & Biome Explorer",
+  "short_name": "Map Explorer",
+  "description": "Interactive seed biome generator, Heat/Humidity Voronoi diagram inspector, and SQLite world map viewer for Luanti and Minetest.",
+  "display": "standalone",
+  "orientation": "any",
+  "scope": "./",
+  "start_url": "./",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "categories": ["developer", "games", "graphics", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Seed & Voronoi Explorer",
+      "short_name": "Seed Map",
+      "description": "Explore Luanti biomes and Voronoi cells from seed",
+      "url": "./?mode=seed",
+      "icons": [{ "src": "logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "SQLite World DB Viewer",
+      "short_name": "World DB",
+      "description": "Open and inspect a local Luanti map.sqlite world directory",
+      "url": "./?mode=hybrid",
+      "icons": [{ "src": "logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ],
+  "icons": [
+    {
+      "src": "logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
