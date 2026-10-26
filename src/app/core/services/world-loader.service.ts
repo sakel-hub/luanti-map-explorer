@@ -1340,16 +1340,17 @@ export class WorldLoaderService {
       let lastRevisionBumpMs = performance.now();
       let unbumpedData = false;
 
-      if (zoom < 3.5) {
-        // TIER 0 GLOBAL & REGIONAL OVERVIEW MODE (Zoomed Out / "Fit Whole World"):
-        // - World 4x4 Tier (zoom < 2.7): stream macro sectors across the whole world at stride = 4 (1 sample per 4x4 MapBlocks = 64x64 nodes, 4x faster!).
-        // - Region 2x2 Tier (2.7 <= zoom < 3.5): stream regional macro sectors around the camera at stride = 2 (1 sample per 2x2 MapBlocks = 32x32 nodes).
+      if (zoom < 6.0) {
+        // TIER 0 & TIER 1 MACRO-SECTORMIPMAP STREAMING (Zoom < 6.0):
+        // - World 4x4 Tier (zoom < 2.7): stream macro sectors across the world at stride = 4 (1 sample per 4x4 MapBlocks = 64x64 nodes).
+        // - Region 2x2 Tier (2.7 <= zoom < 3.8): stream regional macro sectors around the camera at stride = 2 (1 sample per 2x2 MapBlocks = 32x32 nodes).
+        // - Sector 1x1 Tier (3.8 <= zoom < 6.0): stream visible macro sectors at stride = 1 (1 sample per 1x1 MapBlock = 16x16 nodes via fast 4x4 intra-block subsampling!).
         const centerMx = Math.floor(centerX / 1024);
         const centerMz = Math.floor(centerZ / 1024);
-        let targetStride: 2 | 4 = zoom < 2.7 ? 4 : 2;
+        let targetStride: 1 | 2 | 4 = zoom < 2.7 ? 4 : zoom < 3.8 ? 2 : 1;
 
         const collectMissingForStride = (
-          desiredStride: 2 | 4
+          desiredStride: 1 | 2 | 4
         ): Array<{ mx: number; mz: number; dist: number }> => {
           const list: Array<{ mx: number; mz: number; dist: number }> = [];
           if (dbState.exploredMacroSectors && dbState.exploredMacroSectors.length > 0) {
@@ -1407,8 +1408,8 @@ export class WorldLoaderService {
           } else if (missingMacro.length > 250) {
             missingMacro.length = 250;
           }
-        } else {
-          // Region 2x2 mode (2.7 <= zoom < 3.5): stream explored macro sectors visible in the viewport at stride = 2
+        } else if (targetStride === 2) {
+          // Region 2x2 mode (2.7 <= zoom < 3.8): stream explored macro sectors visible in the viewport at stride = 2
           missingMacro = collectMissingForStride(2).filter(
             m =>
               Math.abs(m.mx - centerMx) <= Math.max(6, radiusMacroX) &&
@@ -1417,9 +1418,19 @@ export class WorldLoaderService {
           if (missingMacro.length > 64) {
             missingMacro.length = 64;
           }
+        } else {
+          // Sector 1x1 mode (3.8 <= zoom < 6.0): stream explored macro sectors visible in the viewport at stride = 1 (16x16 node block mipmaps)
+          missingMacro = collectMissingForStride(1).filter(
+            m =>
+              Math.abs(m.mx - centerMx) <= Math.max(4, radiusMacroX) &&
+              Math.abs(m.mz - centerMz) <= Math.max(3, radiusMacroZ)
+          );
+          if (missingMacro.length > 48) {
+            missingMacro.length = 48;
+          }
         }
 
-        const batchSize = targetStride === 4 ? 10 : 6;
+        const batchSize = targetStride === 4 ? 10 : targetStride === 2 ? 6 : 4;
         for (let offset = 0; offset < missingMacro.length; offset += batchSize) {
           if (gen !== this.streamGeneration || this.pendingViewportRequest) break;
           const batch = missingMacro.slice(offset, offset + batchSize);
@@ -1453,7 +1464,9 @@ export class WorldLoaderService {
               label:
                 targetStride === 4
                   ? 'Streaming 4×4 World Overview:'
-                  : 'Streaming 2×2 Region Overview:',
+                  : targetStride === 2
+                    ? 'Streaming 2×2 Region Overview:'
+                    : 'Streaming 1×1 High-Res Sectors:',
               percent: Math.round(ratio * 100),
               current: done,
               total: tot,
