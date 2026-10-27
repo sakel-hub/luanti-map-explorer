@@ -78,6 +78,7 @@ export class PostgresSqlDumpReader implements WorldDatabaseReader {
   private readonly file: File;
   private readonly index: PostgresBlockIndexEntry[] = [];
   private readonly decoder = new TextDecoder('utf-8');
+  private isClosed = false;
 
   constructor(file: File) {
     this.file = file;
@@ -398,6 +399,7 @@ export class PostgresSqlDumpReader implements WorldDatabaseReader {
     maxResults = 4096,
     stride = 1
   ): Promise<RawMapBlockRow[]> {
+    if (this.isClosed) return [];
     const columnGroups = new Map<
       string,
       { targetX: number; targetZ: number; entries: PostgresBlockIndexEntry[] }
@@ -547,6 +549,7 @@ export class PostgresSqlDumpReader implements WorldDatabaseReader {
   }
 
   public close(): void {
+    this.isClosed = true;
     this.index.length = 0;
   }
 }

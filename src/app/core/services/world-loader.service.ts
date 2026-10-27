@@ -55,6 +55,7 @@ export class WorldLoaderService {
   private loadedMacroSectorStride = new Map<string, number>(); // 64x64 MapBlock (1024x1024 node) Tier-0 mipmap sectors -> finest stride (4 or 2)
   private activeSliceKey = '';
   private streamGeneration = 0;
+  private currentLoadId = 0;
   private cancelInitialLoadRequested = false;
   private pendingViewportRequest: { centerX: number; centerZ: number; zoom: number } | null = null;
 
@@ -343,6 +344,14 @@ export class WorldLoaderService {
   public async handleFileListInput(fileList: FileList | File[] | null, isAutoRestore = false): Promise<void> {
     if (!fileList || fileList.length === 0) return;
 
+    // Immediately cancel active background streaming, close previous DB reader, and flush obsolete worker jobs
+    this.cancelActiveStreaming();
+    this.closeActiveDb();
+    this.workerPool.cancelAllPendingTiles();
+    this.workerPool.clearMemoryCache();
+
+    const loadId = ++this.currentLoadId;
+    this.cancelInitialLoadRequested = false;
     this.lastError.set(null);
     this.mapStore.isLoadingWorld.set(true);
     this.mapStore.loadStatusMessage.set('Preparing selected world files...');
@@ -362,6 +371,7 @@ export class WorldLoaderService {
 
     // Yield a browser paint frame so the native macOS File Dialog closes cleanly before file I/O begins
     await new Promise(resolve => setTimeout(resolve, 25));
+    if (loadId !== this.currentLoadId) return;
 
     const filesMap = new Map<string, File>();
     let folderName = '';
@@ -418,11 +428,20 @@ export class WorldLoaderService {
         : 'Imported Luanti World';
     }
 
-    await this.processWorldFiles(folderName, filesMap, isAutoRestore);
+    if (loadId !== this.currentLoadId) return;
+    await this.processWorldFiles(folderName, filesMap, isAutoRestore, loadId);
   }
 
   public async handleDataTransferDrop(dataTransfer: DataTransfer | null): Promise<void> {
     if (!dataTransfer) return;
+
+    this.cancelActiveStreaming();
+    this.closeActiveDb();
+    this.workerPool.cancelAllPendingTiles();
+    this.workerPool.clearMemoryCache();
+
+    const loadId = ++this.currentLoadId;
+    this.cancelInitialLoadRequested = false;
     this.lastError.set(null);
     this.mapStore.isLoadingWorld.set(true);
     this.mapStore.loadStatusMessage.set('Reading dropped world files...');
@@ -519,8 +538,10 @@ export class WorldLoaderService {
         }
       }
 
-      await this.processWorldFiles(detectedFolderName || 'Dropped Luanti World', filesMap, false);
+      if (loadId !== this.currentLoadId) return;
+      await this.processWorldFiles(detectedFolderName || 'Dropped Luanti World', filesMap, false, loadId);
     } catch (err: any) {
+      if (loadId !== this.currentLoadId) return;
       this.lastError.set(err?.message || 'Failed to read dropped files.');
       this.mapStore.isLoadingWorld.set(false);
       this.mapStore.loadStatusMessage.set('');
@@ -576,7 +597,12 @@ export class WorldLoaderService {
     await this.handleSingleDatabaseFile(file);
   }
 
-  private async processWorldFiles(folderName: string, filesMap: Map<string, File>, isAutoRestore = false): Promise<void> {
+  private async processWorldFiles(
+    folderName: string,
+    filesMap: Map<string, File>,
+    isAutoRestore = false,
+    loadId: number = this.currentLoadId
+  ): Promise<void> {
     const releaseWakeLock = await this.pwaStorage.requestWakeLock();
     try {
       const partialConfig: Partial<WorldConfig> = {
@@ -590,6 +616,7 @@ export class WorldLoaderService {
       if (worldMtFile) {
         this.mapStore.loadStatusMessage.set('Parsing world.mt...');
         const text = await worldMtFile.text();
+        if (loadId !== this.currentLoadId) return;
         const parsedMt = this.parseKeyValueConfig(text);
         if (parsedMt['world_name']) partialConfig.worldName = parsedMt['world_name'];
         if (parsedMt['gameid']) partialConfig.gameId = parsedMt['gameid'];
@@ -614,11 +641,14 @@ export class WorldLoaderService {
         }
       }
 
+      if (loadId !== this.currentLoadId) return;
+
       // 2. Parse map_meta.txt
       const mapMetaFile = filesMap.get('map_meta.txt');
       if (mapMetaFile) {
         this.mapStore.loadStatusMessage.set('Extracting seed & noise from map_meta.txt...');
         const text = await mapMetaFile.text();
+        if (loadId !== this.currentLoadId) return;
         const parsedMeta = this.parseKeyValueConfig(text);
 
         if (parsedMeta['seed']) {
@@ -704,8 +734,10 @@ export class WorldLoaderService {
         this.mapStore.loadStatusMessage.set(
           `Opening ${dbFile.name} (${sizeMb} MB) via ${backendDesc}...`
         );
-        decodedDb = await this.parseDatabaseFile(dbFile, detectedBackend);
+        decodedDb = await this.parseDatabaseFile(dbFile, detectedBackend, loadId);
       }
+
+      if (loadId !== this.currentLoadId) return;
 
       if (!worldMtFile && !mapMetaFile && !decodedDb) {
         this.lastError.set(
@@ -734,21 +766,24 @@ export class WorldLoaderService {
         );
       }
     } catch (err: any) {
+      if (loadId !== this.currentLoadId) return;
       console.error('Error processing world files:', err);
       this.lastError.set(err?.message || 'Failed to parse world database.');
     } finally {
       releaseWakeLock();
-      this.mapStore.isLoadingWorld.set(false);
-      this.mapStore.loadStatusMessage.set('');
-      this.mapStore.loadProgress.set(null);
-      if (this.activeDbReader) {
-        if (this.pendingViewportRequest) {
-          const nextReq = this.pendingViewportRequest;
-          this.pendingViewportRequest = null;
-          this.streamViewportBlocks(nextReq.centerX, nextReq.centerZ, nextReq.zoom);
-        } else {
-          const cam = this.mapStore.cameraState();
-          this.streamViewportBlocks(cam.x, cam.z, cam.zoom);
+      if (loadId === this.currentLoadId) {
+        this.mapStore.isLoadingWorld.set(false);
+        this.mapStore.loadStatusMessage.set('');
+        this.mapStore.loadProgress.set(null);
+        if (this.activeDbReader) {
+          if (this.pendingViewportRequest) {
+            const nextReq = this.pendingViewportRequest;
+            this.pendingViewportRequest = null;
+            this.streamViewportBlocks(nextReq.centerX, nextReq.centerZ, nextReq.zoom);
+          } else {
+            const cam = this.mapStore.cameraState();
+            this.streamViewportBlocks(cam.x, cam.z, cam.zoom);
+          }
         }
       }
     }
@@ -841,6 +876,8 @@ export class WorldLoaderService {
     this.playerBaseBuckets.clear();
     this.activeSliceKey = '';
     this.pendingViewportRequest = null;
+    this.isStreamingRegion.set(false);
+    this.streamProgress.set(null);
   }
 
   private getCurrentSliceKey(): string {
@@ -866,7 +903,8 @@ export class WorldLoaderService {
 
   public async parseDatabaseFile(
     file: File,
-    backend: WorldDatabaseBackend = 'sqlite3'
+    backend: WorldDatabaseBackend = 'sqlite3',
+    loadId: number = this.currentLoadId
   ): Promise<DecodedWorldDatabase | null> {
     this.closeActiveDb();
     this.cancelInitialLoadRequested = false;
@@ -880,6 +918,7 @@ export class WorldLoaderService {
       : new SqliteFileBtreeReader(file);
 
     await reader.init();
+    if (loadId !== this.currentLoadId) return null;
     this.activeDbReader = reader;
 
     this.mapStore.setVerticalSlicePreset('surface');
@@ -956,6 +995,8 @@ export class WorldLoaderService {
           etaSeconds: null
         });
       });
+
+      if (loadId !== this.currentLoadId) return null;
 
       exploredBlockKeys = overview.exploredBlockKeys;
       macroMipmap = new Map<string, MacroMipmapCell>();
@@ -1036,6 +1077,8 @@ export class WorldLoaderService {
         }
       }
 
+      if (loadId !== this.currentLoadId) return null;
+
       discoveredModBiomes = this.computeDiscoveredModBiomesList();
       mergedRegions = this.mergePlayerBasesIntoRegions(overview.discoveredRegions);
 
@@ -1065,7 +1108,7 @@ export class WorldLoaderService {
     const step3StartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
     for (let i = 0; i < initialSubSectors.length; i++) {
-      if (this.cancelInitialLoadRequested) break;
+      if (loadId !== this.currentLoadId || this.cancelInitialLoadRequested) break;
       const sub = initialSubSectors[i];
       await this.decodeSubSector16x16(
         sub.sx,
@@ -1102,6 +1145,8 @@ export class WorldLoaderService {
 
       await new Promise(resolve => setTimeout(resolve, 0));
     }
+
+    if (loadId !== this.currentLoadId) return null;
 
     return {
       fileName: file.name,
@@ -1483,6 +1528,7 @@ export class WorldLoaderService {
       return;
     }
 
+    const currentReader = this.activeDbReader;
     const gen = ++this.streamGeneration;
     const startMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
@@ -1835,6 +1881,12 @@ export class WorldLoaderService {
               }
             }, 30);
           }
+        }
+      } else {
+        // If this stream was interrupted, superseded, or database changed, never leak isStreamingRegion / streamProgress
+        if (!this.activeDbReader || this.activeDbReader !== currentReader) {
+          this.isStreamingRegion.set(false);
+          this.streamProgress.set(null);
         }
       }
     }

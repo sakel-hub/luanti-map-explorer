@@ -104,6 +104,26 @@ export class WorkerPoolService {
     }
   }
 
+  /**
+   * Immediately purges ALL queued (unstarted) tile render jobs across color & DEM tiers
+   * when loading a new map world, freeing worker capacity instantly.
+   */
+  public cancelAllPendingTiles(): void {
+    if (this.queue.length === 0) return;
+    const err = new DOMException('Aborted', 'AbortError');
+    while (this.queue.length > 0) {
+      const dropped = this.queue.pop();
+      if (dropped) {
+        for (const rej of dropped.rejecters) {
+          try {
+            rej(err);
+          } catch {}
+        }
+      }
+    }
+    this.updateActiveCount();
+  }
+
   private initWorkerPool(): void {
     if (typeof Worker === 'undefined') {
       return;

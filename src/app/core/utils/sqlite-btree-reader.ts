@@ -38,6 +38,7 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
 
   private readonly chunkCache = new Map<number, Uint8Array>();
   private readonly utf8Decoder = new TextDecoder('utf-8');
+  private isClosed = false;
 
   constructor(file: File) {
     this.file = file;
@@ -64,6 +65,9 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
   }
 
   private async readBytes(offset: number, length: number): Promise<Uint8Array> {
+    if (this.isClosed) {
+      throw new Error('Database reader is closed');
+    }
     const chunkIndex = Math.floor(offset / CHUNK_SIZE_BYTES);
     const chunkStart = chunkIndex * CHUNK_SIZE_BYTES;
     const offsetInChunk = offset - chunkStart;
@@ -579,11 +583,13 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
     keys: Array<{ x: number; y: number; z: number; rowid: number }>,
     onProgress?: (current: number, total: number) => void
   ): Promise<RawSqliteMapBlockRow[]> {
+    if (this.isClosed) return [];
     const sorted = [...keys].sort((a, b) => a.rowid - b.rowid);
     const rows: RawSqliteMapBlockRow[] = [];
     let lastYieldMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
     for (let i = 0; i < sorted.length; i++) {
+      if (this.isClosed) break;
       const m = sorted[i];
       const blob = await this.fetchBlockBlobByRowid(this.blocksTableRootPage, m.rowid);
       // In Luanti v29 Zstd format, 100% air blocks are 48 bytes and 100% ignore blocks are 50 bytes.
@@ -624,6 +630,7 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
     maxResults = 4096,
     stride = 1
   ): Promise<RawSqliteMapBlockRow[]> {
+    if (this.isClosed) return [];
     if (!this.hasXyzSchema) {
       if (this.blocksIndexRootPage > 0) {
         return this.queryClassicPosIndex(
@@ -1784,6 +1791,7 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
   }
 
   public close(): void {
+    this.isClosed = true;
     this.chunkCache.clear();
   }
 }
