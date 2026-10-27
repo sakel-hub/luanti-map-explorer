@@ -10,6 +10,7 @@ export class PwaInstallService {
 
   public readonly canInstall = signal<boolean>(false);
   public readonly isInstalled = signal<boolean>(false);
+  public readonly isInstalling = signal<boolean>(false);
   public readonly isStandalone = signal<boolean>(false);
   public readonly installOutcome = signal<'accepted' | 'dismissed' | null>(null);
 
@@ -57,8 +58,11 @@ export class PwaInstallService {
     // 6. Listen for app installation (from custom event or native browser menu install)
     const onInstalled = () => {
       this.deferredPrompt = null;
-      (window as any).__pwaInstallPrompt = null;
+      if (typeof window !== 'undefined') {
+        (window as any).__pwaInstallPrompt = null;
+      }
       this.canInstall.set(false);
+      this.isInstalling.set(false);
       this.isInstalled.set(true);
     };
 
@@ -84,6 +88,7 @@ export class PwaInstallService {
     this.isStandalone.set(standalone);
     if (standalone) {
       this.isInstalled.set(true);
+      this.isInstalling.set(false);
       this.canInstall.set(false);
     }
     return standalone;
@@ -111,15 +116,20 @@ export class PwaInstallService {
 
       if (choice && choice.outcome === 'accepted') {
         this.installOutcome.set('accepted');
-        this.isInstalled.set(true);
+        this.isInstalling.set(true);
+        // Note: isInstalled is not set here immediately because Android
+        // WebAPK minting and installation is an asynchronous background process.
+        // It is set when 'appinstalled' fires or when running in standalone mode.
         return 'accepted';
       } else {
         this.installOutcome.set('dismissed');
+        this.isInstalling.set(false);
         return 'dismissed';
       }
     } catch {
       this.deferredPrompt = null;
       this.canInstall.set(false);
+      this.isInstalling.set(false);
       return 'unsupported';
     }
   }

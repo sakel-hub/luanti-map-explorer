@@ -364,7 +364,7 @@ import {
             }
           </button>
 
-          <!-- Install PWA App Button (if available) -->
+          <!-- Install PWA App Button / Installing State -->
           @if (pwaInstall.canInstall()) {
             <button
               (click)="installPwa()"
@@ -372,6 +372,11 @@ import {
               <svg lucideDownload class="w-3.5 h-3.5"></svg>
               {{ 'header.installApp' | translate }}
             </button>
+          } @else if (pwaInstall.isInstalling()) {
+            <span class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-sky-950/80 border border-sky-800 text-sky-300 text-xs font-medium">
+              <svg lucideRefreshCw class="w-3.5 h-3.5 animate-spin text-sky-400"></svg>
+              {{ 'header.installingApp' | translate }}
+            </span>
           }
         </div>
       </div>
@@ -423,6 +428,16 @@ import {
                   {{ 'header.installShort' | translate }}
                 </span>
               </button>
+            } @else if (pwaInstall.isInstalling()) {
+              <div class="flex items-center gap-2.5 p-2.5 rounded-lg bg-sky-950/30 border border-sky-800/40 text-sky-300">
+                <div class="w-6 h-6 rounded-full bg-sky-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg lucideRefreshCw class="w-3.5 h-3.5 text-sky-400 animate-spin"></svg>
+                </div>
+                <div class="text-xs">
+                  <div class="font-medium text-sky-200">{{ 'header.installingApp' | translate }}</div>
+                  <div class="text-[10px] text-sky-400/80">{{ 'header.appInstallingDesc' | translate }}</div>
+                </div>
+              </div>
             } @else if (pwaInstall.isInstalled() || pwaInstall.isStandalone()) {
               <div class="flex items-center gap-2.5 p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-800/40 text-emerald-300">
                 <div class="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">

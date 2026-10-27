@@ -30,7 +30,7 @@ describe('PwaInstallService', () => {
     expect(service.canInstall()).toBe(true);
   });
 
-  it('handles promptInstall when user accepts installation', async () => {
+  it('handles promptInstall when user accepts installation and switches to isInstalling', async () => {
     const mockPrompt = vi.fn().mockResolvedValue(undefined);
     const mockEvent = {
       preventDefault: vi.fn(),
@@ -44,8 +44,14 @@ describe('PwaInstallService', () => {
     const result = await service.promptInstall();
     expect(result).toBe('accepted');
     expect(service.canInstall()).toBe(false);
-    expect(service.isInstalled()).toBe(true);
+    expect(service.isInstalling()).toBe(true);
+    expect(service.isInstalled()).toBe(false);
     expect(service.installOutcome()).toBe('accepted');
+
+    // When appinstalled fires, isInstalling becomes false and isInstalled becomes true
+    window.dispatchEvent(new Event('appinstalled'));
+    expect(service.isInstalling()).toBe(false);
+    expect(service.isInstalled()).toBe(true);
   });
 
   it('handles promptInstall when user dismisses installation', async () => {
