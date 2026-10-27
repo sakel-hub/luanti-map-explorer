@@ -27,7 +27,7 @@ type HelpTab = 'worldFolder' | 'voronoi' | 'sqlite' | 'controls';
   ],
   template: `
     <div
-      class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="help-dialog-title"

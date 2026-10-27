@@ -15,7 +15,7 @@ import { LucideKeyboard, LucideX } from '@lucide/angular';
         role="dialog"
         aria-modal="true"
         aria-labelledby="shortcuts-dialog-title"
-        class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+        class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
         <div
           class="bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
           (click)="$event.stopPropagation()">
