@@ -7,12 +7,8 @@
       "installMode": "prefetch",
       "resources": {
         "files": [
+          "/favicon.ico",
           "/logo.svg",
-          "/icon-192.png",
-          "/icon-512.png",
-          "/icon-maskable-192.png",
-          "/icon-maskable-512.png",
-          "/apple-touch-icon.png",
           "/index.csr.html",
           "/index.html",
           "/manifest.webmanifest",
@@ -23,10 +19,11 @@
     },
     {
       "name": "assets",
-      "installMode": "lazy",
+      "installMode": "prefetch",
       "updateMode": "prefetch",
       "resources": {
         "files": [
+          "/icons/**",
           "/sample-luanti-world/**",
           "/**/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2|wasm)"
         ]

@@ -7,7 +7,6 @@ import { KeyboardShortcutsService } from '../../core/services/keyboard-shortcuts
 import { ThemeService } from '../../core/services/theme.service';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { PwaStorageService } from '../../core/services/pwa-storage.service';
-import { PwaInstallService } from '../../core/services/pwa-install.service';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { TooltipDirective } from '../../shared/directives/tooltip.directive';
 import { MapgenType } from '../../core/models/world.model';
@@ -29,9 +28,7 @@ import {
   LucideGitBranch,
   LucideLanguages,
   LucideWifiOff,
-  LucideRefreshCw,
-  LucideCheck,
-  LucideSmartphone
+  LucideRefreshCw
 } from '@lucide/angular';
 
 @Component({
@@ -59,9 +56,7 @@ import {
     LucideGitBranch,
     LucideLanguages,
     LucideWifiOff,
-    LucideRefreshCw,
-    LucideCheck,
-    LucideSmartphone
+    LucideRefreshCw
   ],
   template: `
     <header class="h-12 bg-slate-950 border-b border-slate-800 px-3 flex items-center justify-between text-xs select-none z-20 relative">
@@ -86,7 +81,7 @@ import {
 
         <div class="flex items-center gap-1">
           <!-- Install PWA App Button (Mobile Header if prompt available) -->
-          @if (pwaInstall.canInstall()) {
+          @if (canInstallPwa()) {
             <button
               (click)="installPwa()"
               [attr.aria-label]="'header.installApp' | translate"
@@ -364,19 +359,14 @@ import {
             }
           </button>
 
-          <!-- Install PWA App Button / Installing State -->
-          @if (pwaInstall.canInstall()) {
+          <!-- Install PWA App Button (if available) -->
+          @if (canInstallPwa()) {
             <button
               (click)="installPwa()"
               class="flex items-center gap-1.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-medium px-2.5 py-1 rounded shadow transition active:scale-95">
               <svg lucideDownload class="w-3.5 h-3.5"></svg>
               {{ 'header.installApp' | translate }}
             </button>
-          } @else if (pwaInstall.isInstalling()) {
-            <span class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-sky-950/80 border border-sky-800 text-sky-300 text-xs font-medium">
-              <svg lucideRefreshCw class="w-3.5 h-3.5 animate-spin text-sky-400"></svg>
-              {{ 'header.installingApp' | translate }}
-            </span>
           }
         </div>
       </div>
@@ -414,9 +404,9 @@ import {
         <!-- Drawer Body (Scrollable) -->
         <div class="flex-1 overflow-y-auto p-4 space-y-5 text-xs text-slate-200">
           <!-- App / PWA Installation Section -->
-          <div class="space-y-2">
-            <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">{{ 'header.appSection' | translate }}</label>
-            @if (pwaInstall.canInstall()) {
+          @if (canInstallPwa()) {
+            <div class="space-y-2">
+              <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">{{ 'header.appSection' | translate }}</label>
               <button
                 (click)="installPwa(); closeMobileMenu()"
                 class="w-full flex items-center justify-between p-2.5 rounded-lg bg-gradient-to-r from-sky-600/30 to-indigo-600/30 hover:from-sky-600/40 hover:to-indigo-600/40 border border-sky-500/50 text-sky-200 transition font-medium shadow-sm active:scale-98">
@@ -428,36 +418,8 @@ import {
                   {{ 'header.installShort' | translate }}
                 </span>
               </button>
-            } @else if (pwaInstall.isInstalling()) {
-              <div class="flex items-center gap-2.5 p-2.5 rounded-lg bg-sky-950/30 border border-sky-800/40 text-sky-300">
-                <div class="w-6 h-6 rounded-full bg-sky-500/20 flex items-center justify-center flex-shrink-0">
-                  <svg lucideRefreshCw class="w-3.5 h-3.5 text-sky-400 animate-spin"></svg>
-                </div>
-                <div class="text-xs">
-                  <div class="font-medium text-sky-200">{{ 'header.installingApp' | translate }}</div>
-                  <div class="text-[10px] text-sky-400/80">{{ 'header.appInstallingDesc' | translate }}</div>
-                </div>
-              </div>
-            } @else if (pwaInstall.isInstalled() || pwaInstall.isStandalone()) {
-              <div class="flex items-center gap-2.5 p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-800/40 text-emerald-300">
-                <div class="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                  <svg lucideCheck class="w-3.5 h-3.5 text-emerald-400"></svg>
-                </div>
-                <div class="text-xs">
-                  <div class="font-medium text-emerald-200">{{ 'header.appInstalled' | translate }}</div>
-                  <div class="text-[10px] text-emerald-400/80">{{ 'header.appInstalledDesc' | translate }}</div>
-                </div>
-              </div>
-            } @else {
-              <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 text-[11px] leading-relaxed">
-                <div class="flex items-center gap-1.5 text-slate-300 font-medium mb-1">
-                  <svg lucideSmartphone class="w-3.5 h-3.5 text-sky-400"></svg>
-                  <span>{{ 'header.installGuideTitle' | translate }}</span>
-                </div>
-                <p class="m-0 text-slate-400">{{ 'header.installGuideDesc' | translate }}</p>
-              </div>
-            }
-          </div>
+            </div>
+          }
 
           <!-- Language Selection -->
           <div class="space-y-1.5 pt-2 border-t border-slate-800">
@@ -578,10 +540,17 @@ export class HeaderComponent {
   public readonly themeService = inject(ThemeService);
   public readonly translationService = inject(TranslationService);
   public readonly pwaStorage = inject(PwaStorageService);
-  public readonly pwaInstall = inject(PwaInstallService);
 
-  public readonly canInstallPwa = this.pwaInstall.canInstall;
+  public readonly canInstallPwa = signal<boolean>(false);
   public readonly showMobileMenu = signal<boolean>(false);
+  private deferredPrompt: any = null;
+
+  @HostListener('window:beforeinstallprompt', ['$event'])
+  onBeforeInstallPrompt(event: any): void {
+    event.preventDefault();
+    this.deferredPrompt = event;
+    this.canInstallPwa.set(true);
+  }
 
   @HostListener('window:keydown.escape')
   onEscape(): void {
@@ -606,7 +575,12 @@ export class HeaderComponent {
     await this.worldLoader.openFilePicker();
   }
 
-  public async installPwa(): Promise<void> {
-    await this.pwaInstall.promptInstall();
+  public installPwa(): void {
+    if (!this.deferredPrompt) return;
+    this.deferredPrompt.prompt();
+    this.deferredPrompt.userChoice.then(() => {
+      this.deferredPrompt = null;
+      this.canInstallPwa.set(false);
+    });
   }
 }
