@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import pako from 'pako';
 import {
   packBlockPos,
@@ -1801,6 +1801,45 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
       expect(worldLoader.lastError()).toBeNull();
     } finally {
       globalThis.fetch = origFetch;
+    }
+  });
+
+  it('triggers standard HTML file input by default in openFilePicker to bypass system folder restrictions', async () => {
+    const injector = Injector.create({
+      providers: [
+        { provide: MapStore, useFactory: () => new MapStore() },
+        { provide: CoordProjectionService, useFactory: () => new CoordProjectionService() },
+        { provide: PwaStorageService, useFactory: () => new PwaStorageService() },
+        {
+          provide: WorkerPoolService,
+          useFactory: () => runInInjectionContext(injector, () => new WorkerPoolService())
+        }
+      ]
+    });
+    const worldLoader = runInInjectionContext(injector, () => new WorldLoaderService());
+
+    const fakeInput: any = {
+      type: '',
+      multiple: false,
+      accept: '',
+      click: vi.fn(),
+      setAttribute: vi.fn(),
+      onchange: null
+    };
+    const origDoc = (globalThis as any).document;
+    (globalThis as any).document = {
+      createElement: vi.fn().mockReturnValue(fakeInput)
+    };
+
+    try {
+      await worldLoader.openFilePicker();
+      expect(fakeInput.type).toBe('file');
+      expect(fakeInput.multiple).toBe(true);
+      expect(fakeInput.accept).toContain('.sqlite');
+      expect(fakeInput.accept).toContain('.sql');
+      expect(fakeInput.click).toHaveBeenCalled();
+    } finally {
+      (globalThis as any).document = origDoc;
     }
   });
 });

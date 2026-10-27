@@ -70,10 +70,17 @@ export class WorldLoaderService {
     { sx: number; sz: number; blockCount: number; playerNodes: number; sumX: number; sumZ: number }
   >();
 
-  public async openFilePicker(options?: { directory?: boolean }): Promise<void> {
-    if (!options?.directory && this.pwaStorage.hasFileSystemAccess) {
-      await this.pickWorldFileViaFileSystemApi();
-      return;
+  public async openFilePicker(options?: { directory?: boolean; preferFileSystemApi?: boolean }): Promise<void> {
+    // Only invoke modern File System Access API if explicitly requested.
+    // Standard HTML file input bypasses Chromium's system directory blacklist (e.g. ~/Library/Application Support/ and AppData),
+    // allowing direct selection of Luanti world saves without "contains system files" browser blocks.
+    if (options?.preferFileSystemApi && this.pwaStorage.hasFileSystemAccess) {
+      try {
+        await this.pickWorldFileViaFileSystemApi();
+        return;
+      } catch (e) {
+        console.warn('File System Access API failed or restricted, falling back to standard file input:', e);
+      }
     }
     if (typeof document === 'undefined') return;
 
