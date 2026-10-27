@@ -1757,6 +1757,52 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     // Check that at least some data lines exist with \x hex bytea
     expect(dumpContent).toMatch(/-?\d+\t\\x[0-9a-fA-F]+/);
   });
+
+  it('resolves loadDemoWorld asset URLs relative to baseURI and falls back to in-memory generator on network failure', async () => {
+    const injector = Injector.create({
+      providers: [
+        { provide: MapStore, useFactory: () => new MapStore() },
+        { provide: CoordProjectionService, useFactory: () => new CoordProjectionService() },
+        { provide: PwaStorageService, useFactory: () => new PwaStorageService() },
+        {
+          provide: WorkerPoolService,
+          useFactory: () => runInInjectionContext(injector, () => new WorkerPoolService())
+        }
+      ]
+    });
+    const worldLoader = runInInjectionContext(injector, () => new WorldLoaderService());
+    const store = runInInjectionContext(injector, () => injector.get(MapStore));
+
+    // Mock fetch that records requested URLs and simulates 404
+    const requestedUrls: string[] = [];
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      requestedUrls.push(input.toString());
+      return new Response('Not Found', { status: 404, statusText: 'Not Found' });
+    };
+
+    try {
+      // Test loading sqlite demo world
+      await worldLoader.loadDemoWorld('sqlite3');
+      expect(requestedUrls.length).toBeGreaterThan(0);
+      expect(requestedUrls[0]).toContain('sample-luanti-world/map.sqlite');
+      // Even though fetch returned 404, the fallback populated the store seamlessly
+      expect(store.worldDatabase()).not.toBeNull();
+      expect(store.databaseBackend()).toBe('sqlite3');
+      expect(worldLoader.lastError()).toBeNull();
+
+      // Test loading postgresql demo world
+      requestedUrls.length = 0;
+      await worldLoader.loadDemoWorld('postgresql');
+      expect(requestedUrls.length).toBeGreaterThan(0);
+      expect(requestedUrls[0]).toContain('sample-luanti-world/map.sql');
+      expect(store.worldDatabase()).not.toBeNull();
+      expect(store.databaseBackend()).toBe('postgresql');
+      expect(worldLoader.lastError()).toBeNull();
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
 });
 
 

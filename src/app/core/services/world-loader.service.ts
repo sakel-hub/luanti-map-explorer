@@ -2125,14 +2125,33 @@ export class WorldLoaderService {
       const backendLabel = backend === 'postgresql' ? 'PostgreSQL SQL Dump' : 'SQLite DB';
       this.mapStore.loadStatusMessage.set(`Fetching demo world (${backendLabel})...`);
 
+      // Resolve base path dynamically to support subpath hosting (e.g. GitHub Pages /luanti-map-explorer/)
+      let sampleWorldBase = 'sample-luanti-world/';
+      try {
+        const rawBase =
+          typeof document !== 'undefined' && document.baseURI
+            ? document.baseURI
+            : typeof window !== 'undefined' && window.location?.href
+              ? window.location.href
+              : '';
+        if (rawBase && (rawBase.startsWith('http://') || rawBase.startsWith('https://'))) {
+          const baseWithSlash = rawBase.endsWith('/')
+            ? rawBase
+            : `${rawBase.split('?')[0].replace(/\/[^/]*$/, '')}/`;
+          sampleWorldBase = new URL('sample-luanti-world/', baseWithSlash).href;
+        }
+      } catch {
+        sampleWorldBase = 'sample-luanti-world/';
+      }
+
       const [dbRes, metaRes, mtRes] = await Promise.all([
-        fetch(`/sample-luanti-world/${dbFileName}`),
-        fetch('/sample-luanti-world/map_meta.txt'),
-        fetch('/sample-luanti-world/world.mt')
+        fetch(`${sampleWorldBase}${dbFileName}`),
+        fetch(`${sampleWorldBase}map_meta.txt`),
+        fetch(`${sampleWorldBase}world.mt`)
       ]);
 
       if (!dbRes.ok) {
-        throw new Error(`Could not load /sample-luanti-world/${dbFileName} (HTTP ${dbRes.status})`);
+        throw new Error(`Could not load ${sampleWorldBase}${dbFileName} (HTTP ${dbRes.status})`);
       }
 
       const dbBlob = await dbRes.blob();
@@ -2150,8 +2169,16 @@ export class WorldLoaderService {
       safeSetItem('luanti_explorer_is_demo_v1', 'true');
       await this.handleFileListInput(files);
     } catch (err: any) {
-      console.error('Failed to load demo world:', err);
-      this.lastError.set(err?.message || 'Failed to load demo world.');
+      console.warn('Failed to fetch bundled sample files, falling back to in-memory demo world generator:', err);
+      try {
+        this.mapStore.loadDemoDatabase(backend);
+        this.lastLoadedSummary.set(
+          `Loaded in-memory Demo Citadel World (${backend === 'postgresql' ? 'PostgreSQL' : 'SQLite'})`
+        );
+      } catch (fallbackErr: any) {
+        console.error('Failed to load demo world:', fallbackErr);
+        this.lastError.set(err?.message || 'Failed to load demo world.');
+      }
     } finally {
       this.mapStore.isLoadingWorld.set(false);
       this.mapStore.loadStatusMessage.set('');
