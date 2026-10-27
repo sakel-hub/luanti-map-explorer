@@ -143,8 +143,23 @@ function sampleDbHierarchy(
       const y = blk.topY[cellIdx];
       if (y > -32768) {
         const cOff = cellIdx * 3;
+        const rawGround = blk.groundY ? blk.groundY[cellIdx] : -32768;
+        const isExtrudedBuilding =
+          !!blk.extrusionKind &&
+          blk.extrusionKind[cellIdx] === 1 &&
+          (!blk.extrusionSpan || blk.extrusionSpan[cellIdx] >= 2);
         const groundY =
-          blk.groundY && blk.groundY[cellIdx] > -32768 ? blk.groundY[cellIdx] : blk.avgY;
+          rawGround > -32768 && y - rawGround <= 24
+            ? rawGround
+            : isExtrudedBuilding && blk.extrusionSpan
+              ? y - blk.extrusionSpan[cellIdx]
+              : isExtrudedBuilding
+                ? blk.avgY
+                : y;
+        const nodeName =
+          blk.palette && blk.nodeIndex && blk.nodeIndex[cellIdx] < blk.palette.length
+            ? blk.palette[blk.nodeIndex[cellIdx]]
+            : blk.dominantNode;
         return {
           r: blk.rgb[cOff],
           g: blk.rgb[cOff + 1],
@@ -152,7 +167,7 @@ function sampleDbHierarchy(
           topY: y,
           groundY,
           waterDepth: blk.waterDepth[cellIdx],
-          nodeName: blk.dominantNode
+          nodeName
         };
       }
     }
@@ -855,13 +870,15 @@ export function renderTilePngBuffer(
 
         // Highlight / Isolate Selected Voronoi Biome on SQLite Terrain
         if (job.isolatedBiomeId) {
-          const voxelNode = resolveNodeNameFromExactColor(
-            dbSample.r,
-            dbSample.g,
-            dbSample.b,
-            dbSample.waterDepth,
-            dbSample.nodeName
-          );
+          const voxelNode =
+            dbSample.nodeName ||
+            resolveNodeNameFromExactColor(
+              dbSample.r,
+              dbSample.g,
+              dbSample.b,
+              dbSample.waterDepth,
+              dbSample.nodeName
+            );
           const dbBiome = resolveBiomeForDbNode(
             voxelNode,
             dbSample.topY,

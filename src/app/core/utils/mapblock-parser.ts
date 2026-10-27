@@ -13,17 +13,18 @@ import { resolveSaplingForNode } from '../data/sapling-registry';
 import { LuantiWorldSynthesizer, createDefaultNoiseParams } from './perlin-noise';
 
 function isBiomeGroundSurfaceNode(name: string): boolean {
+  if (isPlayerStructuralNode(name)) {
+    return false;
+  }
   const lower = name.toLowerCase();
   if (
     lower.includes('water') ||
     lower.includes('leaves') ||
     lower.includes('needles') ||
     lower.includes('tree') ||
-    lower.includes('wood') ||
     lower.includes('bush') ||
     lower.includes('flower') ||
     lower.includes('fern') ||
-    lower.includes('torch') ||
     (lower.includes('grass_') && !lower.includes('dirt_with_'))
   ) {
     return false;
@@ -38,7 +39,16 @@ function isBiomeGroundSurfaceNode(name: string): boolean {
     lower.includes('gravel') ||
     lower.includes('turf') ||
     lower.includes('moss') ||
-    lower.includes('clay')
+    lower.includes('clay') ||
+    lower.includes('litter') ||
+    lower.includes('rock') ||
+    lower.includes('granite') ||
+    lower.includes('diorite') ||
+    lower.includes('andesite') ||
+    lower.includes('basalt') ||
+    lower.includes('tuff') ||
+    lower.includes('calcite') ||
+    lower.includes('terracotta')
   );
 }
 
@@ -144,63 +154,8 @@ export function isTreeFoliageNode(name: string): boolean {
   );
 }
 
-export function isVerticalFloraPillarNode(name: string): boolean {
-  const lower = name.toLowerCase();
-  if (
-    lower.includes('dirt') ||
-    lower.includes('mosaic') ||
-    lower.includes('plank') ||
-    lower.includes('door') ||
-    lower.includes('fence') ||
-    lower.includes('trapdoor') ||
-    lower.includes('pressure_plate') ||
-    lower.includes('scaffolding') ||
-    lower.includes('wood') ||
-    lower.includes('sprout') ||
-    lower.includes('sapling')
-  ) {
-    return false;
-  }
-  return lower.includes('bamboo') || lower.includes('cactus') || lower.includes('papyrus');
-}
-
-export function isCrystalPillarNode(name: string): boolean {
-  const lower = name.toLowerCase();
-  if (
-    lower.includes('dirt') ||
-    lower.includes('sand') ||
-    lower.includes('moss') ||
-    lower.includes('cobble') ||
-    lower.includes('stone') ||
-    lower.includes('grass') ||
-    lower.includes('water') ||
-    lower.includes('bush')
-  ) {
-    return false;
-  }
-  return (
-    lower.includes('crystal_megalith') ||
-    lower.includes('crystal_pillar') ||
-    lower.includes('crystal_block') ||
-    lower.includes('crystal_tree') ||
-    lower.includes('crystal_leaves') ||
-    lower.includes('crystal_galleon') ||
-    lower.includes('amethyst_block') ||
-    lower.includes('amethyst_cluster') ||
-    lower.includes('budding_amethyst') ||
-    lower.includes('amethyst_bud') ||
-    lower.includes('quartz_pillar') ||
-    lower.startsWith('everness:crystal_')
-  );
-}
-
 export function isNaturalTerrainGroundNode(name: string): boolean {
-  if (
-    isPlayerStructuralNode(name) ||
-    isFoliageOrSpikeNode(name) ||
-    isVerticalFloraPillarNode(name) ||
-    isCrystalPillarNode(name)
-  ) {
+  if (isPlayerStructuralNode(name) || isFoliageOrSpikeNode(name)) {
     return false;
   }
   if (isBiomeGroundSurfaceNode(name)) {
@@ -212,7 +167,24 @@ export function isNaturalTerrainGroundNode(name: string): boolean {
     lower.includes('mud') ||
     lower.includes('netherrack') ||
     lower.includes('end_stone') ||
-    lower.includes('obsidian') ||
+    lower.includes('_ore') ||
+    lower.includes('ore_') ||
+    lower.includes(':ore') ||
+    lower.endsWith('ore') ||
+    lower.includes('stone_with_') ||
+    lower.includes('granite') ||
+    lower.includes('diorite') ||
+    lower.includes('andesite') ||
+    lower.includes('basalt') ||
+    lower.includes('tuff') ||
+    lower.includes('calcite') ||
+    lower.includes('dripstone') ||
+    lower.includes('blackstone') ||
+    lower.includes('terracotta') ||
+    lower.includes('hardened_clay') ||
+    lower.includes('prismarine') ||
+    lower.includes('amethyst') ||
+    (lower.includes('obsidian') && !lower.includes('brick') && !lower.includes('block') && !lower.includes('glass')) ||
     lower.includes('deepslate')
   );
 }
@@ -230,14 +202,30 @@ const EXACT_COLOR_TO_NODE_NAME: Record<number, string> = (() => {
 
 export function isPlayerStructuralNode(name: string): boolean {
   const lower = name.toLowerCase();
-  // Natural Everness travertine/mineral pool stones & biome cobbles are natural terrain, not buildings
+  // Natural Everness travertine/mineral pool stones & natural biome cobbles are terrain, not buildings
   if (
     lower.includes('mineral_stone') ||
     lower.includes('mineral_sand') ||
     lower.includes('mineral_waters') ||
     lower.includes('coral_desert_cobble') ||
     lower.includes('crystal_cobble') ||
-    lower.includes('icecobble')
+    lower.includes('crystal_block') ||
+    lower.includes('crystal_pillar') ||
+    lower.includes('crystal_megalith') ||
+    lower.includes('amethyst_block') ||
+    lower.includes('moss_block') ||
+    lower.includes('snowblock') ||
+    lower.includes('icecobble') ||
+    lower.includes('mossycobble') ||
+    lower.includes('_ore') ||
+    lower.includes('ore_') ||
+    lower.includes(':ore') ||
+    lower.endsWith('ore') ||
+    lower.includes('stone_with_') ||
+    ((lower.includes('terracotta') || lower.includes('hardened_clay')) &&
+      !lower.includes('glazed') && !lower.includes('brick') && !lower.includes('stair') && !lower.includes('slab')) ||
+    ((lower.includes('granite') || lower.includes('diorite') || lower.includes('andesite') || lower.includes('basalt') || lower.includes('tuff')) &&
+      !lower.includes('polished') && !lower.includes('brick') && !lower.includes('stair') && !lower.includes('slab'))
   ) {
     return false;
   }
@@ -245,14 +233,40 @@ export function isPlayerStructuralNode(name: string): boolean {
     lower.includes('stonebrick') ||
     lower.includes('sandstonebrick') ||
     lower.includes('brick') ||
+    lower.includes('stone_block') ||
+    lower.includes('sandstone_block') ||
+    lower.includes('obsidian_block') ||
+    lower.includes('obsidian_glass') ||
     lower.includes('wood') ||
+    lower.includes('plank') ||
     lower.includes('glass') ||
+    lower.includes('pane') ||
+    lower.includes('window') ||
+    lower.includes('wool') ||
+    lower.includes('bakedclay') ||
+    lower.includes('hardened_clay') ||
+    lower.includes('terracotta') ||
+    lower.includes('concrete') ||
+    lower.includes('quartz') ||
+    lower.includes('marble') ||
+    lower.includes('granite') ||
+    lower.includes('tile') ||
+    lower.includes('paved') ||
+    lower.includes('pillar') ||
+    lower.includes('chiseled') ||
+    lower.includes('carved') ||
+    lower.includes('polished') ||
+    lower.includes('smooth_stone') ||
+    lower.includes('bookshelf') ||
     lower.includes('chest') ||
     lower.includes('furnace') ||
     lower.includes('meselamp') ||
+    lower.includes('lantern') ||
     lower.includes('torch') ||
     lower.includes('protector') ||
     lower.includes('door') ||
+    lower.includes('trapdoor') ||
+    lower.includes('gate') ||
     lower.includes('fence') ||
     lower.includes('stair') ||
     lower.includes('slab') ||
@@ -260,14 +274,14 @@ export function isPlayerStructuralNode(name: string): boolean {
     lower.includes('steelblock') ||
     lower.includes('goldblock') ||
     lower.includes('copperblock') ||
+    lower.includes('tinblock') ||
+    lower.includes('bronzeblock') ||
     lower.includes('diamondblock') ||
+    lower.includes('mese') ||
     lower.includes('cobble') ||
-    lower.includes('plank') ||
     lower.includes('wall') ||
     lower.includes('roof') ||
-    lower.includes('concrete') ||
-    lower.includes('terracotta') ||
-    lower.includes('wool') ||
+    lower.includes('carpet') ||
     lower.includes('ladder')
   );
 }
@@ -275,18 +289,16 @@ export function isPlayerStructuralNode(name: string): boolean {
 export function isExtrudableStructureWallNode(name: string): boolean {
   if (!isPlayerStructuralNode(name)) return false;
   const lower = name.toLowerCase();
-  // Exclude hanging sails (wool), thin masts/fences, rails, torches, doors, and 1-block containers from 3D wall extrusion
+  // Exclude thin non-volumetric attachments (fences, rails, ladders, torches, carpets) and 1-block containers
   if (
-    lower.includes('wool') ||
     lower.includes('fence') ||
     lower.includes('rail') ||
     lower.includes('ladder') ||
     lower.includes('torch') ||
-    lower.includes('door') ||
     lower.includes('protector') ||
     lower.includes('chest') ||
     lower.includes('furnace') ||
-    lower.includes('mossycobble')
+    lower.includes('carpet')
   ) {
     return false;
   }
@@ -294,18 +306,13 @@ export function isExtrudableStructureWallNode(name: string): boolean {
 }
 
 /**
- * Classifies a column's 3D extrusion category directly from its true voxel node name:
- * 0 = None (Natural terrain, water, mineral pools, foliage canopy, decorative items)
- * 1 = Structure (Player/architectural building walls, masonry, wood planks, towers)
- * 2 = Vertical Flora Pillar (Bamboo stalks, Cactus, Papyrus)
- * 3 = Crystal Pillar (Crystal Forest pillars/megaliths/trees, Amethyst clusters)
+ * Classifies whether a column represents a 3D building extrusion directly from its voxel node name:
+ * 0 = None (Natural terrain, water, mineral pools, foliage/flora, non-volumetric attachments)
+ * 1 = 3D Building (Player/architectural building walls, roofs, domes, masonry, wood planks, towers)
  */
-export function classifyColumnExtrusionKind(name: string): 0 | 1 | 2 | 3 {
+export function classifyColumnExtrusionKind(name: string): 0 | 1 {
   if (!name || name === 'air' || name === 'ignore') return 0;
-  if (isVerticalFloraPillarNode(name)) return 2;
-  if (isCrystalPillarNode(name)) return 3;
-  if (isExtrudableStructureWallNode(name)) return 1;
-  return 0;
+  return isExtrudableStructureWallNode(name) ? 1 : 0;
 }
 
 export function resolveNodeNameFromExactColor(
@@ -404,11 +411,15 @@ export function lookupWorldColumn(
         const g = blk.rgb[cOff + 1];
         const b = blk.rgb[cOff + 2];
         const waterDepth = blk.waterDepth[idx];
+        const nodeName =
+          blk.palette && blk.nodeIndex && blk.nodeIndex[idx] < blk.palette.length
+            ? blk.palette[blk.nodeIndex[idx]]
+            : resolveNodeNameFromExactColor(r, g, b, waterDepth, blk.dominantNode);
         return {
           x: worldX,
           z: worldZ,
           topY: y,
-          nodeName: resolveNodeNameFromExactColor(r, g, b, waterDepth, blk.dominantNode),
+          nodeName,
           color: [r, g, b],
           waterDepth
         };
@@ -471,6 +482,8 @@ export function mergeParsedBlockIntoCompactSurface(
   let modified = false;
   const treeCandidates: Array<{ lx: number; lz: number; y: number; saplingKey: string }> = [];
 
+  let minStructuralBaseY = 32767;
+
   for (let i = 0; i < b.columns.length; i++) {
     const col = b.columns[i];
     const worldY = b.blockY * 16 + col.topLocalY;
@@ -488,7 +501,8 @@ export function mergeParsedBlockIntoCompactSurface(
         topY: topYArr,
         groundY: groundYArr,
         waterDepth: new Uint8Array(256),
-        extrusionKind: new Uint8Array(256),
+        palette: [col.nodeName],
+        nodeIndex: new Uint8Array(256),
         dominantNode: col.nodeName,
         avgColor: [0, 0, 0],
         avgY: worldY,
@@ -498,17 +512,64 @@ export function mergeParsedBlockIntoCompactSurface(
     }
 
     const idx = (col.localZ << 4) | col.localX;
+    const rawSpan =
+      col.contiguousSpan ??
+      (col.groundLocalY !== undefined
+        ? Math.max(1, col.topLocalY - col.groundLocalY)
+        : col.bottomLocalY !== undefined
+          ? Math.max(1, col.topLocalY - col.bottomLocalY)
+          : 1);
+    const topRunBottomLocalY = col.topLocalY - rawSpan + 1;
+    let resolvedFloorLocalY: number | undefined;
+    if (col.hasAirGapBelow) {
+      if (col.floorLocalY !== undefined) {
+        resolvedFloorLocalY = col.floorLocalY >= 0 ? col.floorLocalY : undefined;
+      } else if (col.bottomLocalY !== undefined && col.bottomLocalY < topRunBottomLocalY) {
+        resolvedFloorLocalY = col.bottomLocalY;
+      } else if (col.groundLocalY !== undefined && col.groundLocalY < topRunBottomLocalY) {
+        resolvedFloorLocalY = col.groundLocalY;
+      }
+    }
+    const airGapInBlock =
+      resolvedFloorLocalY !== undefined ? topRunBottomLocalY - resolvedFloorLocalY - 1 : 99;
+    const hasEnclosedRoom =
+      !!col.hasAirGapBelow &&
+      resolvedFloorLocalY !== undefined &&
+      airGapInBlock <= 8 &&
+      !col.trunkNodeName &&
+      !col.hasFoliage;
+    const colStructuralSpan = !col.hasAirGapBelow
+      ? rawSpan
+      : hasEnclosedRoom
+        ? Math.max(2, col.topLocalY - resolvedFloorLocalY!)
+        : 0;
+
+    if (b.blockY >= 0 && colStructuralSpan >= 2) {
+      const colBottomWorldY = worldY - colStructuralSpan;
+      if (colBottomWorldY >= minY && colBottomWorldY < minStructuralBaseY) {
+        minStructuralBaseY = colBottomWorldY;
+      }
+    }
 
     // Independently track true natural terrain groundY across multi-block vertical columns
-    // (e.g. when blockY=1 contains only tree canopy or building roof, and blockY=0 contains ground)
+    // (bounded within 18 nodes of surface topY so deep underground stone never collapses hills)
     if (blk.groundY) {
       let resolvedGroundLocalY: number | undefined = col.groundLocalY;
-      if (resolvedGroundLocalY === undefined && isNaturalTerrainGroundNode(col.nodeName)) {
+      if (resolvedGroundLocalY === undefined && hasEnclosedRoom) {
+        resolvedGroundLocalY = resolvedFloorLocalY;
+      } else if (resolvedGroundLocalY === undefined && isNaturalTerrainGroundNode(col.nodeName)) {
         resolvedGroundLocalY = col.topLocalY;
       }
       if (resolvedGroundLocalY !== undefined && resolvedGroundLocalY >= 0) {
         const worldGroundY = b.blockY * 16 + resolvedGroundLocalY;
-        if (worldGroundY >= minY && worldGroundY <= maxY && worldGroundY > blk.groundY[idx]) {
+        const currentTopY = blk.topY[idx] > -32768 ? Math.max(worldY, blk.topY[idx]) : worldY;
+        if (
+          worldGroundY >= minY &&
+          worldGroundY <= maxY &&
+          worldGroundY > blk.groundY[idx] &&
+          currentTopY - worldGroundY <= 24 &&
+          (b.blockY >= 0 || currentTopY <= 16)
+        ) {
           blk.groundY[idx] = worldGroundY;
           modified = true;
         }
@@ -517,6 +578,8 @@ export function mergeParsedBlockIntoCompactSurface(
 
     if (worldY >= blk.topY[idx]) {
       const prevTopY = blk.topY[idx];
+      const prevExtKind = blk.extrusionKind ? blk.extrusionKind[idx] : 0;
+      const prevExtSpan = blk.extrusionSpan ? blk.extrusionSpan[idx] : 0;
       const prevWater = blk.waterDepth[idx];
       const color = resolveNodeColor(col.nodeName);
       const cOff = idx * 3;
@@ -526,24 +589,67 @@ export function mergeParsedBlockIntoCompactSurface(
       blk.topY[idx] = worldY;
       blk.waterDepth[idx] = Math.min(255, col.waterCount + prevWater);
 
-      let extKind = classifyColumnExtrusionKind(col.nodeName);
-      if (extKind === 1) {
-        const span = col.contiguousSpan ?? 2;
-        const bottomLocalY = col.topLocalY - span + 1;
-        const bottomWorldY = b.blockY * 16 + bottomLocalY;
-        const hasCrossBlockAirGap = prevTopY > -32768 && bottomWorldY > prevTopY + 1;
-        if (
-          col.waterCount > 0 ||
-          prevWater > 0 ||
-          col.hasAirGapBelow ||
-          hasCrossBlockAirGap ||
-          (span < 2 && bottomLocalY > 0)
-        ) {
-          extKind = 0;
+      if (!blk.palette) blk.palette = [];
+      if (!blk.nodeIndex) blk.nodeIndex = new Uint8Array(256);
+      let pIdx = blk.palette.indexOf(col.nodeName);
+      if (pIdx === -1) {
+        if (blk.palette.length < 255) {
+          pIdx = blk.palette.length;
+          blk.palette.push(col.nodeName);
+        } else {
+          pIdx = 0;
         }
       }
-      if (blk.extrusionKind) {
-        blk.extrusionKind[idx] = extKind;
+      blk.nodeIndex[idx] = pIdx;
+
+      let extKind = classifyColumnExtrusionKind(col.nodeName);
+      let extSpan = 0;
+      if (extKind === 1 && (col.waterCount > 0 || prevWater > 0)) {
+        extKind = 0;
+      }
+      if (extKind === 1) {
+        extSpan = Math.min(18, colStructuralSpan);
+        if (prevTopY > -32768) {
+          const topRunBottomWorldY = b.blockY * 16 + topRunBottomLocalY;
+          const crossGap = topRunBottomWorldY - prevTopY - 1;
+          if (!col.hasAirGapBelow && topRunBottomLocalY === 0 && crossGap === 0 && prevExtKind === 1) {
+            extSpan = Math.min(18, rawSpan + prevExtSpan);
+          } else if (
+            col.hasAirGapBelow &&
+            resolvedFloorLocalY === undefined &&
+            crossGap >= 0 &&
+            crossGap <= 6 &&
+            !col.trunkNodeName &&
+            !col.hasFoliage
+          ) {
+            extSpan = Math.min(18, worldY - prevTopY);
+          }
+        }
+        const reachesBlockBottomSolid = !col.hasAirGapBelow && topRunBottomLocalY === 0;
+        const canAwaitLowerFloor =
+          !!col.hasAirGapBelow &&
+          resolvedFloorLocalY === undefined &&
+          topRunBottomLocalY <= 6 &&
+          !col.trunkNodeName &&
+          !col.hasFoliage &&
+          prevTopY === -32768;
+        if (extSpan < 2 && !reachesBlockBottomSolid && !canAwaitLowerFloor) {
+          extKind = 0;
+          extSpan = 0;
+        }
+      }
+      if (extKind === 1) {
+        if (!blk.extrusionKind) {
+          blk.extrusionKind = new Uint8Array(256);
+        }
+        if (!blk.extrusionSpan) {
+          blk.extrusionSpan = new Uint8Array(256);
+        }
+        blk.extrusionKind[idx] = 1;
+        blk.extrusionSpan[idx] = extSpan;
+      } else if (blk.extrusionKind) {
+        blk.extrusionKind[idx] = 0;
+        if (blk.extrusionSpan) blk.extrusionSpan[idx] = 0;
       }
       if (isPlayerStructuralNode(col.nodeName)) {
         blk.playerNodeCount = (blk.playerNodeCount || 0) + 1;
@@ -566,16 +672,37 @@ export function mergeParsedBlockIntoCompactSurface(
         blk.waterDepth[idx] = Math.min(255, blk.waterDepth[idx] + col.waterCount);
         modified = true;
       }
-      // If an upper block had a structural node (extKind === 1), but this lower block has water or
-      // an open air cavity at the top of the block (col.topLocalY < 15), clear the structural extrusion
-      // so suspended ship sails, overhangs, or arches over water/air never extrude into solid monolith walls.
-      if (
-        blk.extrusionKind &&
-        blk.extrusionKind[idx] === 1 &&
-        (col.waterCount > 0 || col.topLocalY < 15)
-      ) {
-        blk.extrusionKind[idx] = 0;
-        blk.playerNodeCount = Math.max(0, (blk.playerNodeCount || 1) - 1);
+      if (blk.extrusionKind && blk.extrusionKind[idx] === 1) {
+        if (col.waterCount > 0 && blk.waterDepth[idx] > 0) {
+          blk.extrusionKind[idx] = 0;
+          if (blk.extrusionSpan) blk.extrusionSpan[idx] = 0;
+          blk.playerNodeCount = Math.max(0, (blk.playerNodeCount || 1) - 1);
+        } else if (blk.extrusionSpan) {
+          const upperSpan = blk.extrusionSpan[idx];
+          if (upperSpan === 0) {
+            const totalRoomSpan = blk.topY[idx] - worldY;
+            if (totalRoomSpan >= 2 && totalRoomSpan <= 8 && !col.trunkNodeName && !col.hasFoliage) {
+              blk.extrusionSpan[idx] = totalRoomSpan;
+              if (blk.groundY && worldY > blk.groundY[idx]) {
+                blk.groundY[idx] = worldY;
+              }
+            } else {
+              blk.extrusionKind[idx] = 0;
+              blk.extrusionSpan[idx] = 0;
+            }
+          } else {
+            const upperBottomWorldY = blk.topY[idx] - upperSpan + 1;
+            const crossGap = upperBottomWorldY - worldY - 1;
+            if (crossGap === 0) {
+              if (classifyColumnExtrusionKind(col.nodeName) === 1 && colStructuralSpan > 0) {
+                blk.extrusionSpan[idx] = Math.min(18, upperSpan + colStructuralSpan);
+              }
+            } else if (upperSpan < 2 && crossGap > 0) {
+              blk.extrusionKind[idx] = 0;
+              blk.extrusionSpan[idx] = 0;
+            }
+          }
+        }
       }
     }
 
@@ -601,15 +728,10 @@ export function mergeParsedBlockIntoCompactSurface(
         col.trunkNodeName.includes('crystal_tree') ||
         col.trunkNodeName.includes('crystal_bush'));
 
-    const isGroundedTrunk =
-      col.trunkNodeName &&
-      !col.hasAirGapBelow &&
-      (col.groundLocalY !== undefined || isNaturalTerrainGroundNode(col.nodeName));
-
     const isValidTreeRoot =
       col.trunkNodeName &&
       !col.hasAirGapBelow &&
-      (col.hasFoliage || isSelfContainedPlant || isGroundedTrunk) &&
+      (col.hasFoliage || isSelfContainedPlant) &&
       !isPlayerStructuralNode(col.nodeName) &&
       !isPlayerStructuralNode(col.trunkNodeName) &&
       !(col.waterCount > 2 && (col.trunkLocalY ?? col.topLocalY) < col.topLocalY);
@@ -711,6 +833,19 @@ export function mergeParsedBlockIntoCompactSurface(
 
   if (!blk || !modified) return null;
 
+  if (blk.treeAnchors && blk.treeAnchors.length > 0) {
+    blk.treeAnchors = blk.treeAnchors.filter(a => {
+      const idx = (a.lz << 4) | a.lx;
+      if (blk.extrusionKind && blk.extrusionKind[idx] === 1 && (!blk.extrusionSpan || blk.extrusionSpan[idx] >= 2)) {
+        return false;
+      }
+      if (blk.topY[idx] > a.y + 14) {
+        return false;
+      }
+      return true;
+    });
+  }
+
   // Recompute block average color & elevation for zoomed-out LOD & Mipmap Pyramid
   let sumR = 0;
   let sumG = 0;
@@ -728,10 +863,18 @@ export function mergeParsedBlockIntoCompactSurface(
       sumG += blk.rgb[cOff + 1];
       sumB += blk.rgb[cOff + 2];
       sumY += blk.topY[i];
-      if (blk.groundY && blk.groundY[i] > -32768) {
-        sumGroundY += blk.groundY[i];
-        groundCount++;
-      }
+      const isExtrudedBuilding =
+        !!blk.extrusionKind &&
+        blk.extrusionKind[i] === 1 &&
+        (!blk.extrusionSpan || blk.extrusionSpan[i] >= 2);
+      const colGround =
+        blk.groundY && blk.groundY[i] > -32768 && blk.topY[i] - blk.groundY[i] <= 24
+          ? blk.groundY[i]
+          : isExtrudedBuilding && blk.extrusionSpan
+            ? blk.topY[i] - blk.extrusionSpan[i]
+            : blk.topY[i];
+      sumGroundY += colGround;
+      groundCount++;
       sumWater += blk.waterDepth[i];
       count++;
     }
@@ -743,7 +886,33 @@ export function mergeParsedBlockIntoCompactSurface(
       Math.round(sumG / count),
       Math.round(sumB / count)
     ];
-    blk.avgY = groundCount > 0 ? Math.round(sumGroundY / groundCount) : Math.round(sumY / count);
+    if (groundCount > 0) {
+      blk.avgY = Math.round(sumGroundY / groundCount);
+    } else if (blk.extrusionKind) {
+      let neighborGroundSum = 0;
+      let neighborGroundCount = 0;
+      const nCoords = [
+        `${b.blockX - 1},${b.blockZ}`,
+        `${b.blockX + 1},${b.blockZ}`,
+        `${b.blockX},${b.blockZ - 1}`,
+        `${b.blockX},${b.blockZ + 1}`
+      ];
+      for (let nIdx = 0; nIdx < 4; nIdx++) {
+        const nBlk = blockSurfaces.get(nCoords[nIdx]);
+        if (nBlk && !nBlk.extrusionKind) {
+          neighborGroundSum += nBlk.avgY;
+          neighborGroundCount++;
+        }
+      }
+      if (neighborGroundCount > 0) {
+        const neighborAvg = Math.round(neighborGroundSum / neighborGroundCount);
+        blk.avgY = minStructuralBaseY < 32767 ? Math.min(neighborAvg, minStructuralBaseY) : neighborAvg;
+      } else {
+        blk.avgY = minStructuralBaseY < 32767 ? minStructuralBaseY : Math.round(sumY / count);
+      }
+    } else {
+      blk.avgY = Math.round(sumY / count);
+    }
     const avgWater = Math.round(sumWater / count);
 
     // 1. Store exact 1x1 MapBlock overview entry (never bleeds into adjacent unexplored blocks!)
@@ -1397,16 +1566,52 @@ function extractSurfaceColumnsFromParam0(
   const columns: ParsedMapBlockSummary['columns'] = [];
   const foliageGrid = new Uint8Array(256);
 
+  // Pre-classify each unique param0 node ID once per MapBlock (typically 4..25 IDs instead of 4,096 string checks)
+  const FLAG_AIR = 1;
+  const FLAG_IGNORE = 2;
+  const FLAG_WATER = 4;
+  const FLAG_FOLIAGE = 8;
+  const FLAG_TRUNK = 16;
+  const FLAG_NATURAL_GROUND = 32;
+  const FLAG_UNEXCAVATED_ROCK = 64;
+
+  const nodeFlags: Record<number, number> = {};
+  for (const idKey in nodeMapping) {
+    const id = Number(idKey);
+    const name = nodeMapping[id];
+    if (!name || name === 'air') {
+      nodeFlags[id] = FLAG_AIR;
+      continue;
+    }
+    if (name === 'ignore') {
+      nodeFlags[id] = FLAG_IGNORE;
+      continue;
+    }
+    let flags = 0;
+    if (name.includes('water')) flags |= FLAG_WATER;
+    if (!caveMode) {
+      if (isTreeFoliageNode(name)) flags |= FLAG_FOLIAGE;
+      if (isTreeTrunkNode(name)) flags |= FLAG_TRUNK;
+      if (isNaturalTerrainGroundNode(name)) flags |= FLAG_NATURAL_GROUND;
+    } else {
+      if (isUnexcavatedMatrixRock(name)) flags |= FLAG_UNEXCAVATED_ROCK;
+    }
+    nodeFlags[id] = flags;
+  }
+
   for (let lz = 0; lz < 16; lz++) {
     for (let lx = 0; lx < 16; lx++) {
       if (!caveMode) {
         let topLocalY = -1;
         let groundLocalY = -1;
+        let floorLocalY = -1;
+        let bottomLocalY = -1;
         let topNodeName = 'air';
         let waterCount = 0;
         let contiguousSpan = 0;
         let inTopContiguousRun = false;
         let hasAirGapBelow = false;
+        let airGapCount = 0;
         let trunkNodeName: string | undefined;
         let trunkLocalY: number | undefined;
 
@@ -1414,26 +1619,31 @@ function extractSurfaceColumnsFromParam0(
           const nodeIdx = (lz << 8) | (ly << 4) | lx;
           const byteIdx = param0Offset + (nodeIdx << 1);
           const param0 = (buffer[byteIdx] << 8) | buffer[byteIdx + 1];
-          const name = nodeMapping[param0] || 'air';
+          const flags = nodeFlags[param0] ?? FLAG_AIR;
 
-          if (name === 'air' || name === 'ignore') {
-            if (topLocalY !== -1 && groundLocalY === -1 && name === 'air') {
+          if (flags & (FLAG_AIR | FLAG_IGNORE)) {
+            if (topLocalY !== -1 && groundLocalY === -1 && (flags & FLAG_AIR)) {
               inTopContiguousRun = false;
               hasAirGapBelow = true;
+              if (floorLocalY === -1) {
+                airGapCount++;
+              }
             }
             continue;
           }
-          if (isTreeFoliageNode(name)) {
+          const name = nodeMapping[param0] || 'air';
+          if (flags & FLAG_FOLIAGE) {
             foliageGrid[(lz << 4) | lx] = 1;
           }
-          if (isTreeTrunkNode(name) && trunkLocalY === undefined) {
+          if ((flags & FLAG_TRUNK) && trunkLocalY === undefined) {
             trunkNodeName = name;
             trunkLocalY = ly;
           }
-          if (name.includes('water')) {
+          if (flags & FLAG_WATER) {
             waterCount++;
             if (topLocalY === -1) {
               topLocalY = ly;
+              bottomLocalY = ly;
               topNodeName = name;
             } else if (groundLocalY === -1) {
               inTopContiguousRun = false;
@@ -1441,15 +1651,19 @@ function extractSurfaceColumnsFromParam0(
             }
             continue;
           }
+          if (hasAirGapBelow && floorLocalY === -1 && !(flags & FLAG_FOLIAGE)) {
+            floorLocalY = ly;
+          }
+          bottomLocalY = ly;
           if (topLocalY === -1) {
             topLocalY = ly;
             topNodeName = name;
             contiguousSpan = 1;
             inTopContiguousRun = true;
-          } else if (inTopContiguousRun && !isNaturalTerrainGroundNode(name)) {
+          } else if (inTopContiguousRun && !(flags & FLAG_NATURAL_GROUND)) {
             contiguousSpan++;
           }
-          if (groundLocalY === -1 && isNaturalTerrainGroundNode(name)) {
+          if (groundLocalY === -1 && (flags & FLAG_NATURAL_GROUND)) {
             groundLocalY = ly;
             inTopContiguousRun = false;
             break;
@@ -1462,6 +1676,12 @@ function extractSurfaceColumnsFromParam0(
             localZ: lz,
             topLocalY,
             groundLocalY: groundLocalY !== -1 ? groundLocalY : undefined,
+            floorLocalY: hasAirGapBelow
+              ? floorLocalY !== -1 && airGapCount <= 8
+                ? floorLocalY
+                : -1
+              : undefined,
+            bottomLocalY: bottomLocalY !== -1 ? bottomLocalY : topLocalY,
             contiguousSpan,
             hasAirGapBelow,
             nodeName: topNodeName,
@@ -1482,16 +1702,18 @@ function extractSurfaceColumnsFromParam0(
           const nodeIdx = (lz << 8) | (ly << 4) | lx;
           const byteIdx = param0Offset + (nodeIdx << 1);
           const param0 = (buffer[byteIdx] << 8) | buffer[byteIdx + 1];
-          const name = nodeMapping[param0] || 'air';
+          const flags = nodeFlags[param0] ?? FLAG_AIR;
 
-          if (name === 'ignore') continue;
+          if (flags & FLAG_IGNORE) continue;
 
-          if (name === 'air') {
+          if (flags & FLAG_AIR) {
             seenAirCavity = true;
             continue;
           }
 
-          if (name.includes('water')) {
+          const name = nodeMapping[param0] || 'air';
+
+          if (flags & FLAG_WATER) {
             seenAirCavity = true;
             waterCount++;
             if (floorLocalY === -1) {
@@ -1501,7 +1723,7 @@ function extractSurfaceColumnsFromParam0(
             continue;
           }
 
-          if (!isUnexcavatedMatrixRock(name) && specialNodeY === -1) {
+          if (!(flags & FLAG_UNEXCAVATED_ROCK) && specialNodeY === -1) {
             specialNodeY = ly;
             specialNodeName = name;
           }
