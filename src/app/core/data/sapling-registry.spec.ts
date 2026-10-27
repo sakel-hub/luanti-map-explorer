@@ -3,6 +3,9 @@ import {
   SAPLING_TEXTURE_ENTRIES,
   TREE_COMPOSITE_ENTRIES,
   createProceduralFallbackBillboard,
+  isDecorationOrCropKey,
+  isDecorationOrCropNode,
+  resolveDecorationOrCropKey,
   resolveSaplingForBiome,
   resolveSaplingForNode
 } from './sapling-registry';
@@ -90,6 +93,70 @@ describe('Sapling Texture & Flora Registry', () => {
       expect(resolveSaplingForNode('default:water_source')).toBeNull();
       expect(resolveSaplingForNode('air')).toBeNull();
       expect(resolveSaplingForNode('ignore')).toBeNull();
+    });
+
+    it('resolves flowers, mushrooms, reeds, ferns, and waterlilies across MTG, BakedClay, Everness, Ethereal, and MineClone', () => {
+      expect(resolveSaplingForNode('flowers:rose')).toBe('flowers:rose');
+      expect(resolveSaplingForNode('flowers:tulip')).toBe('flowers:tulip');
+      expect(resolveSaplingForNode('flowers:tulip_black')).toBe('flowers:tulip_black');
+      expect(resolveSaplingForNode('flowers:dandelion_yellow')).toBe('flowers:dandelion_yellow');
+      expect(resolveSaplingForNode('flowers:dandelion_white')).toBe('flowers:dandelion_white');
+      expect(resolveSaplingForNode('flowers:chrysanthemum_green')).toBe('flowers:chrysanthemum_green');
+      expect(resolveSaplingForNode('flowers:geranium')).toBe('flowers:geranium');
+      expect(resolveSaplingForNode('flowers:viola')).toBe('flowers:viola');
+      expect(resolveSaplingForNode('flowers:waterlily')).toBe('flowers:waterlily');
+      expect(resolveSaplingForNode('flowers:mushroom_red')).toBe('flowers:mushroom_red');
+      expect(resolveSaplingForNode('flowers:mushroom_brown')).toBe('flowers:mushroom_brown');
+
+      expect(resolveSaplingForNode('bakedclay:delphinium')).toBe('bakedclay:delphinium');
+      expect(resolveSaplingForNode('bakedclay:thistle')).toBe('bakedclay:thistle');
+      expect(resolveSaplingForNode('bakedclay:lazarus')).toBe('bakedclay:lazarus');
+      expect(resolveSaplingForNode('bakedclay:mannagrass')).toBe('bakedclay:mannagrass');
+
+      expect(resolveSaplingForNode('default:papyrus')).toBe('default:papyrus');
+      expect(resolveSaplingForNode('default:fern_2')).toBe('default:fern');
+      expect(resolveSaplingForNode('default:junglegrass')).toBe('default:junglegrass');
+      expect(resolveSaplingForNode('default:dry_shrub')).toBe('default:dry_shrub');
+      expect(resolveSaplingForNode('default:marram_grass_1')).toBe('default:marram_grass');
+
+      expect(resolveSaplingForNode('everness:lotus_flower_pink')).toBe('everness:lotus_flower_pink');
+      expect(resolveSaplingForNode('everness:venus_trap')).toBe('everness:venus_trap');
+      expect(resolveSaplingForNode('everness:crystal_mushrooms')).toBe('everness:crystal_mushrooms');
+      expect(resolveSaplingForNode('mcl_flowers:poppy')).toBe('flowers:rose');
+      expect(resolveSaplingForNode('mcl_flowers:blue_orchid')).toBe('flowers:geranium');
+
+      expect(isDecorationOrCropKey('flowers:rose')).toBe(true);
+      expect(isDecorationOrCropKey('default:tree')).toBe(false);
+    });
+
+    it('resolves farming crops from MTG farming, x_farming, Farming Redo, and MineClone while excluding basic grass & soil/crates', () => {
+      expect(resolveDecorationOrCropKey('farming:wheat_8')).toBe('farming:wheat');
+      expect(resolveDecorationOrCropKey('farming:cotton_8')).toBe('farming:cotton');
+      expect(resolveDecorationOrCropKey('farming:cotton_wild')).toBe('farming:cotton_wild');
+      expect(resolveDecorationOrCropKey('x_farming:barley_8')).toBe('x_farming:barley');
+      expect(resolveDecorationOrCropKey('x_farming:cotton_8')).toBe('x_farming:cotton');
+      expect(resolveDecorationOrCropKey('x_farming:corn_10')).toBe('x_farming:corn');
+      expect(resolveDecorationOrCropKey('x_farming:carrot_8')).toBe('x_farming:carrot');
+      expect(resolveDecorationOrCropKey('x_farming:potato_8')).toBe('x_farming:potato');
+      expect(resolveDecorationOrCropKey('x_farming:beetroot_8')).toBe('x_farming:beetroot');
+      expect(resolveDecorationOrCropKey('x_farming:strawberry_4')).toBe('x_farming:strawberry');
+      expect(resolveDecorationOrCropKey('x_farming:coffee_5')).toBe('x_farming:coffee');
+      expect(resolveDecorationOrCropKey('x_farming:rice_8')).toBe('x_farming:rice');
+      expect(resolveDecorationOrCropKey('x_farming:soybean_7')).toBe('x_farming:soybean');
+      expect(resolveDecorationOrCropKey('x_farming:stevia_8')).toBe('x_farming:stevia');
+      expect(resolveDecorationOrCropKey('x_farming:obsidian_wart_6')).toBe('x_farming:obsidian_wart');
+      expect(resolveDecorationOrCropKey('x_farming:melon_8')).toBe('x_farming:melon');
+      expect(resolveDecorationOrCropKey('x_farming:pumpkin_8')).toBe('x_farming:pumpkin');
+      expect(resolveDecorationOrCropKey('mcl_farming:carrot_4')).toBe('x_farming:carrot');
+
+      // Excludes basic grass tufts, soil, straw, and storage crates/bags
+      expect(isDecorationOrCropNode('default:grass_3')).toBe(false);
+      expect(isDecorationOrCropNode('default:dry_grass_4')).toBe(false);
+      expect(isDecorationOrCropNode('mcl_flowers:tallgrass')).toBe(false);
+      expect(isDecorationOrCropNode('farming:soil_wet')).toBe(false);
+      expect(isDecorationOrCropNode('farming:straw')).toBe(false);
+      expect(isDecorationOrCropNode('x_farming:crate_carrot_3')).toBe(false);
+      expect(isDecorationOrCropNode('x_farming:bag_rice_grains')).toBe(false);
     });
   });
 

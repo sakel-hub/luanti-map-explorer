@@ -65,8 +65,132 @@ export const SAPLING_TEXTURE_ENTRIES: SaplingTextureEntry[] = [
   // Asuna
   { key: 'japaneseforest:japanese_sapling_1', file: 'mcl_cherry_blossom_sapling.png' },
   { key: 'japaneseforest:japanese_sapling_2', file: 'mcl_cherry_blossom_sapling.png' },
-  { key: 'japaneseforest:japanese_sapling_3', file: 'mcl_cherry_blossom_sapling.png' }
+  { key: 'japaneseforest:japanese_sapling_3', file: 'mcl_cherry_blossom_sapling.png' },
+
+  // Minetest Game — Flowers, Mushrooms, Reeds, Ferns & Farming
+  { key: 'flowers:rose', file: 'flowers_rose.png' },
+  { key: 'flowers:tulip', file: 'flowers_tulip.png' },
+  { key: 'flowers:tulip_black', file: 'flowers_tulip_black.png' },
+  { key: 'flowers:dandelion_yellow', file: 'flowers_dandelion_yellow.png' },
+  { key: 'flowers:dandelion_white', file: 'flowers_dandelion_white.png' },
+  { key: 'flowers:chrysanthemum_green', file: 'flowers_chrysanthemum_green.png' },
+  { key: 'flowers:geranium', file: 'flowers_geranium.png' },
+  { key: 'flowers:viola', file: 'flowers_viola.png' },
+  { key: 'flowers:waterlily', file: 'flowers_waterlily.png' },
+  { key: 'flowers:mushroom_red', file: 'flowers_mushroom_red.png' },
+  { key: 'flowers:mushroom_brown', file: 'flowers_mushroom_brown.png' },
+  { key: 'farming:wheat', file: 'farming_wheat_8.png' },
+  { key: 'farming:cotton', file: 'farming_cotton_8.png' },
+  { key: 'farming:cotton_wild', file: 'farming_cotton_wild.png' },
+  { key: 'default:papyrus', file: 'default_papyrus.png' },
+  { key: 'default:fern', file: 'default_fern_1.png' },
+  { key: 'default:junglegrass', file: 'default_junglegrass.png' },
+  { key: 'default:dry_shrub', file: 'default_dry_shrub.png' },
+  { key: 'default:marram_grass', file: 'default_marram_grass_1.png' },
+  { key: 'default:large_cactus_seedling', file: 'default_large_cactus_seedling.png' },
+
+  // X Farming Mod — Crops & Tree Saplings
+  { key: 'x_farming:barley', file: 'x_farming_barley_8.png' },
+  { key: 'x_farming:cotton', file: 'x_farming_cotton_8.png' },
+  { key: 'x_farming:corn', file: 'x_farming_corn_10.png' },
+  { key: 'x_farming:carrot', file: 'x_farming_carrot_8.png' },
+  { key: 'x_farming:potato', file: 'x_farming_potato_8.png' },
+  { key: 'x_farming:beetroot', file: 'x_farming_beetroot_8.png' },
+  { key: 'x_farming:strawberry', file: 'x_farming_strawberry_4.png' },
+  { key: 'x_farming:coffee', file: 'x_farming_coffee_5.png' },
+  { key: 'x_farming:rice', file: 'x_farming_rice_8.png' },
+  { key: 'x_farming:soybean', file: 'x_farming_soybean_7.png' },
+  { key: 'x_farming:stevia', file: 'x_farming_stevia_8.png' },
+  { key: 'x_farming:obsidian_wart', file: 'x_farming_obsidian_wart_6.png' },
+  { key: 'x_farming:melon', file: 'x_farming_melon_8.png' },
+  { key: 'x_farming:pumpkin', file: 'x_farming_pumpkin_8.png' },
+  { key: 'x_farming:kiwi_sapling', file: 'x_farming_kiwi_sapling.png' },
+  { key: 'x_farming:pine_nut_sapling', file: 'x_farming_pine_nut_sapling.png' },
+  { key: 'x_farming:christmas_tree_sapling', file: 'x_farming_christmas_tree_sapling.png' },
+  { key: 'x_farming:large_cactus_seedling', file: 'x_farming_large_cactus_with_fruit_seedling.png' },
+
+  // Baked Clay Mod — Flowers
+  { key: 'bakedclay:delphinium', file: 'baked_clay_delphinium.png' },
+  { key: 'bakedclay:thistle', file: 'baked_clay_thistle.png' },
+  { key: 'bakedclay:lazarus', file: 'baked_clay_lazarus.png' },
+  { key: 'bakedclay:mannagrass', file: 'baked_clay_mannagrass.png' },
+
+  // Everness Mod — Flowers, Mushrooms & Plants
+  { key: 'everness:lotus_flower_pink', file: 'everness_lotus_flower_pink_item.png' },
+  { key: 'everness:lotus_flower_white', file: 'everness_lotus_flower_white_item.png' },
+  { key: 'everness:lotus_flower_purple', file: 'everness_lotus_flower_purple_item.png' },
+  { key: 'everness:venus_trap', file: 'everness_venus_trap_item.png' },
+  { key: 'everness:rose_bush', file: 'everness_rose_bush_item.png' },
+  { key: 'everness:forsythia', file: 'everness_forsythia_item.png' },
+  { key: 'everness:cave_flower', file: 'everness_cave_flower_item.png' },
+  { key: 'everness:crystal_mushrooms', file: 'everness_crystal_mushrooms.png' },
+  { key: 'everness:coral_mushrooms', file: 'everness_coral_mushrooms_bioluminescent.png' },
+  { key: 'everness:coral_plant', file: 'everness_coral_plant_bioluminescent.png' },
+  { key: 'everness:bloodspore_plant', file: 'everness_bloodspore_plant.png' },
+  { key: 'everness:blooming_cooksonia', file: 'everness_blooming_cooksonia.png' },
+  { key: 'everness:red_castor', file: 'everness_red_castor_4.png' }
 ];
+
+export const DECORATION_AND_CROP_KEYS = new Set<string>([
+  'flowers:rose',
+  'flowers:tulip',
+  'flowers:tulip_black',
+  'flowers:dandelion_yellow',
+  'flowers:dandelion_white',
+  'flowers:chrysanthemum_green',
+  'flowers:geranium',
+  'flowers:viola',
+  'flowers:waterlily',
+  'flowers:mushroom_red',
+  'flowers:mushroom_brown',
+  'farming:wheat',
+  'farming:cotton',
+  'farming:cotton_wild',
+  'default:papyrus',
+  'default:fern',
+  'default:junglegrass',
+  'default:dry_shrub',
+  'default:marram_grass',
+  'x_farming:barley',
+  'x_farming:cotton',
+  'x_farming:corn',
+  'x_farming:carrot',
+  'x_farming:potato',
+  'x_farming:beetroot',
+  'x_farming:strawberry',
+  'x_farming:coffee',
+  'x_farming:rice',
+  'x_farming:soybean',
+  'x_farming:stevia',
+  'x_farming:obsidian_wart',
+  'x_farming:melon',
+  'x_farming:pumpkin',
+  'bakedclay:delphinium',
+  'bakedclay:thistle',
+  'bakedclay:lazarus',
+  'bakedclay:mannagrass',
+  'everness:lotus_flower_pink',
+  'everness:lotus_flower_white',
+  'everness:lotus_flower_purple',
+  'everness:venus_trap',
+  'everness:rose_bush',
+  'everness:forsythia',
+  'everness:cave_flower',
+  'everness:crystal_mushrooms',
+  'everness:coral_mushrooms',
+  'everness:coral_plant',
+  'everness:bloodspore_plant',
+  'everness:blooming_cooksonia',
+  'everness:red_castor'
+]);
+
+/**
+ * Returns true if the resolved saplingKey represents a ground decoration (flower, mushroom,
+ * reed, fern, shrub) or farming crop rather than a tree.
+ */
+export function isDecorationOrCropKey(saplingKey: string): boolean {
+  return DECORATION_AND_CROP_KEYS.has(saplingKey);
+}
 
 export interface TreeCompositeEntry {
   key: string;
@@ -391,12 +515,289 @@ export function renderCompositeTreeBillboard(
 }
 
 /**
- * Resolves a voxel node name (trunk, log, leaves, sprout) to its canonical tree sprite or sapling key.
+ * Resolves a surface decoration (flower, mushroom, reed, fern, waterlily, shrub)
+ * or farming crop node name to its canonical sprite key, or null if not a decoration/crop.
+ * Ubiquitous basic grass blades (default:grass_1..5, default:dry_grass_1..5, tallgrass)
+ * and non-plant blocks (soil, straw, crates, bags, bricks) are intentionally excluded.
+ */
+export function resolveDecorationOrCropKey(nodeName: string): string | null {
+  if (!nodeName || nodeName === 'air' || nodeName === 'ignore') return null;
+  const lower = nodeName.toLowerCase();
+
+  // Exclude ubiquitous basic grass blades so grassland biomes stay clean and fast
+  if (
+    lower.startsWith('default:grass_') ||
+    lower.startsWith('default:dry_grass_') ||
+    lower.startsWith('everness:dry_grass_') ||
+    lower.startsWith('everness:coral_grass_') ||
+    lower.startsWith('everness:crystal_grass_') ||
+    lower.startsWith('everness:cursed_grass_') ||
+    lower.startsWith('everness:ngrass_') ||
+    lower.startsWith('everness:grass_extras_') ||
+    lower === 'mcl_flowers:tallgrass' ||
+    lower.startsWith('mcl_flowers:double_grass')
+  ) {
+    return null;
+  }
+
+  // Exclude soil, farmland, storage crates/bags, crafted items, tools, and structural blocks
+  if (
+    lower.includes('soil') ||
+    lower.includes('dirt') ||
+    lower.includes('sand') ||
+    lower.includes('stone') ||
+    lower.endsWith(':straw') ||
+    lower.includes('straw_') ||
+    lower.includes('crate') ||
+    lower.includes('bag_') ||
+    lower.includes('_bag') ||
+    lower.includes('block') ||
+    lower.includes('brick') ||
+    lower.includes('stair') ||
+    lower.includes('slab') ||
+    lower.includes('wood') ||
+    lower.includes('plank') ||
+    lower.includes('fence') ||
+    lower.includes('door') ||
+    lower.includes('gate') ||
+    lower.includes('chest') ||
+    lower.includes('wall') ||
+    lower.includes('floor') ||
+    lower.includes('stack') ||
+    lower.includes('flour') ||
+    lower.includes('bread') ||
+    lower.includes('_pie') ||
+    lower.includes('pie_') ||
+    lower.includes('soup') ||
+    lower.includes('stew') ||
+    lower.includes('bowl') ||
+    lower.includes('bottle') ||
+    lower.includes('jar_') ||
+    lower.includes('candle') ||
+    lower.includes('pillow') ||
+    lower.includes('rope') ||
+    lower.includes('safety_net') ||
+    lower.includes('stove') ||
+    lower.includes('trough') ||
+    lower.includes('rack') ||
+    lower.includes('composter') ||
+    lower.includes('scarecrow') ||
+    lower.includes('hive') ||
+    lower.includes('fish') ||
+    lower.includes('hoe') ||
+    lower.includes('sickle') ||
+    lower.includes('watering_can') ||
+    lower.includes('salt') ||
+    lower.includes(':ice_') ||
+    lower.includes('icefishing') ||
+    lower.includes('drilled_ice') ||
+    lower.endsWith(':ice') ||
+    lower.includes('torch') ||
+    lower.includes('lantern') ||
+    lower.includes('ceramic_pot') ||
+    lower.includes('flowerpot') ||
+    lower.includes('_baked') ||
+    lower.includes('baked_') ||
+    lower.includes('poisonous') ||
+    (lower.includes('seed') && !lower.includes('seedling'))
+  ) {
+    return null;
+  }
+
+  // 1. Minetest Game Flowers & Mushrooms (flowers:*)
+  if (lower.startsWith('flowers:')) {
+    if (lower.includes('mushroom_red') || lower.includes('red_natural')) return 'flowers:mushroom_red';
+    if (lower.includes('mushroom_brown') || lower.includes('brown_natural')) return 'flowers:mushroom_brown';
+    if (lower.includes('waterlily')) return 'flowers:waterlily';
+    if (lower.includes('rose')) return 'flowers:rose';
+    if (lower.includes('tulip_black')) return 'flowers:tulip_black';
+    if (lower.includes('tulip')) return 'flowers:tulip';
+    if (lower.includes('dandelion_yellow')) return 'flowers:dandelion_yellow';
+    if (lower.includes('dandelion_white')) return 'flowers:dandelion_white';
+    if (lower.includes('chrysanthemum_green')) return 'flowers:chrysanthemum_green';
+    if (lower.includes('geranium')) return 'flowers:geranium';
+    if (lower.includes('viola')) return 'flowers:viola';
+  }
+
+  // 2. Baked Clay Flowers (bakedclay:*)
+  if (lower.startsWith('bakedclay:')) {
+    if (lower === 'bakedclay:delphinium') return 'bakedclay:delphinium';
+    if (lower === 'bakedclay:thistle') return 'bakedclay:thistle';
+    if (lower === 'bakedclay:lazarus') return 'bakedclay:lazarus';
+    if (lower === 'bakedclay:mannagrass') return 'bakedclay:mannagrass';
+    return null;
+  }
+
+  // 3. Reeds, Ferns & Shrubs (default:*, mcl_core:*)
+  if (lower === 'default:papyrus' || lower === 'mcl_core:reeds') return 'default:papyrus';
+  if (lower.startsWith('default:fern_') || lower === 'default:fern') return 'default:fern';
+  if (lower === 'default:junglegrass') return 'default:junglegrass';
+  if (lower === 'default:dry_shrub' || lower === 'mcl_core:deadbush') return 'default:dry_shrub';
+  if (lower.startsWith('default:marram_grass')) return 'default:marram_grass';
+
+  // 4. MineClone2 / VoxeLibre Flowers, Mushrooms & Crops (mcl_*)
+  if (lower.startsWith('mcl_flowers:')) {
+    if (lower.includes('waterlily')) return 'flowers:waterlily';
+    if (lower.includes('fern')) return 'default:fern';
+    if (lower.includes('poppy') || lower.includes('tulip_red')) return 'flowers:rose';
+    if (lower.includes('rose_bush')) return 'everness:rose_bush';
+    if (lower.includes('wither_rose')) return 'flowers:tulip_black';
+    if (lower.includes('tulip_orange')) return 'flowers:tulip';
+    if (lower.includes('tulip_pink') || lower.includes('peony')) return 'bakedclay:lazarus';
+    if (
+      lower.includes('tulip_white') ||
+      lower.includes('oxeye_daisy') ||
+      lower.includes('azure_bluet') ||
+      lower.includes('lily_of_the_valley')
+    ) {
+      return 'flowers:dandelion_white';
+    }
+    if (lower.includes('dandelion') || lower.includes('sunflower')) return 'flowers:dandelion_yellow';
+    if (lower.includes('blue_orchid') || lower.includes('cornflower')) return 'flowers:geranium';
+    if (lower.includes('allium') || lower.includes('lilac')) return 'flowers:viola';
+  }
+  if (lower.startsWith('mcl_mushrooms:') || lower.startsWith('mcl_crimson:')) {
+    if (lower.includes('mushroom_red') || lower.includes('crimson_fungus')) return 'flowers:mushroom_red';
+    if (lower.includes('mushroom_brown')) return 'flowers:mushroom_brown';
+    if (lower.includes('warped_fungus')) return 'everness:crystal_mushrooms';
+  }
+  if (lower.startsWith('mcl_nether:nether_wart')) {
+    return 'x_farming:obsidian_wart';
+  }
+
+  // 5. Everness Flowers, Mushrooms & Ground Plants (everness:*)
+  if (lower.startsWith('everness:')) {
+    if (lower.includes('lotus_flower_pink')) return 'everness:lotus_flower_pink';
+    if (lower.includes('lotus_flower_white')) return 'everness:lotus_flower_white';
+    if (lower.includes('lotus_flower_purple')) return 'everness:lotus_flower_purple';
+    if (lower.includes('lotus_leaf')) return 'flowers:waterlily';
+    if (lower.includes('venus_trap')) return 'everness:venus_trap';
+    if (lower.includes('rose_bush')) return 'everness:rose_bush';
+    if (lower.includes('forsythia')) return 'everness:forsythia';
+    if (lower.includes('cave_flower') || lower.includes('clover_with_flowers') || lower.startsWith('everness:flowers')) {
+      return 'everness:cave_flower';
+    }
+    if (lower.includes('crystal_mushrooms')) return 'everness:crystal_mushrooms';
+    if (
+      lower.includes('coral_mushrooms') ||
+      lower.includes('luminous_mushroom') ||
+      lower.includes('glossy_mushroom')
+    ) {
+      return 'everness:coral_mushrooms';
+    }
+    if (lower.includes('coral_plant') || lower.includes('coral_burdock') || lower.includes('coral_shrub')) {
+      return 'everness:coral_plant';
+    }
+    if (lower.includes('bloodspore_plant')) return 'everness:bloodspore_plant';
+    if (
+      lower.includes('blooming_cooksonia') ||
+      lower.includes('forsaken_desert_plant') ||
+      lower.includes('twisted_crystal_grass')
+    ) {
+      return 'everness:blooming_cooksonia';
+    }
+    if (lower.includes('red_castor')) return 'everness:red_castor';
+  }
+
+  // 6. Ethereal Ground Flora & Crops (ethereal:*)
+  if (lower.startsWith('ethereal:')) {
+    if (lower.includes('fire_flower')) return 'flowers:tulip';
+    if (lower.includes('illumishroom')) return 'everness:crystal_mushrooms';
+    if (lower === 'ethereal:mushroom') return 'flowers:mushroom_red';
+    if (lower.includes('fern')) return 'default:fern';
+    if (lower.includes('dry_shrub')) return 'default:dry_shrub';
+    if (lower.includes('snowygrass') || lower.includes('crystalgrass')) return 'default:marram_grass';
+    if (lower.includes('strawberry')) return 'x_farming:strawberry';
+    if (lower.includes('onion')) return 'x_farming:potato';
+  }
+
+  // 7. Farming Crops (farming:*, x_farming:*, mcl_farming:*)
+  if (
+    lower.startsWith('farming:') ||
+    lower.startsWith('x_farming:') ||
+    lower.startsWith('mcl_farming:')
+  ) {
+    // Exclude x_farming trees & cacti (handled as trees/saplings below)
+    if (
+      lower.includes('kiwi') ||
+      lower.includes('pine_nut') ||
+      lower.includes('christmas_tree') ||
+      lower.includes('cactus') ||
+      lower.includes('jungle')
+    ) {
+      return null;
+    }
+    if (lower.includes('cotton_wild')) return 'farming:cotton_wild';
+    if (lower.startsWith('farming:cotton')) return 'farming:cotton';
+    if (lower.includes('cotton') || lower.includes('hemp')) return 'x_farming:cotton';
+    if (lower.includes('barley')) return 'x_farming:barley';
+    if (lower.includes('wheat') || lower.includes('oat') || lower.includes('rye')) return 'farming:wheat';
+    if (lower.includes('corn')) return 'x_farming:corn';
+    if (lower.includes('carrot')) return 'x_farming:carrot';
+    if (lower.includes('potato') || lower.includes('garlic') || lower.includes('onion')) return 'x_farming:potato';
+    if (lower.includes('beetroot') || lower.includes('rhubarb')) return 'x_farming:beetroot';
+    if (
+      lower.includes('strawberry') ||
+      lower.includes('raspberry') ||
+      lower.includes('blueberry') ||
+      lower.includes('blackberry') ||
+      lower.includes('sweet_berry') ||
+      lower.includes('tomato') ||
+      lower.includes('chili')
+    ) {
+      return 'x_farming:strawberry';
+    }
+    if (
+      lower.includes('coffee') ||
+      lower.includes('beans') ||
+      lower.includes('pea') ||
+      lower.includes('grapes') ||
+      lower.includes('cocoa')
+    ) {
+      return 'x_farming:coffee';
+    }
+    if (lower.includes('rice')) return 'x_farming:rice';
+    if (
+      lower.includes('soy') ||
+      lower.includes('cabbage') ||
+      lower.includes('lettuce') ||
+      lower.includes('spinach') ||
+      lower.includes('parsley') ||
+      lower.includes('mint') ||
+      lower.includes('artichoke')
+    ) {
+      return 'x_farming:soybean';
+    }
+    if (lower.includes('stevia') || lower.includes('vanilla')) return 'x_farming:stevia';
+    if (lower.includes('obsidian_wart') || lower.includes('nether_wart')) return 'x_farming:obsidian_wart';
+    if (lower.includes('melon') || lower.includes('pineapple')) return 'x_farming:melon';
+    if (lower.includes('pumpkin')) return 'x_farming:pumpkin';
+    if (lower.includes('sunflower')) return 'flowers:dandelion_yellow';
+  }
+
+  return null;
+}
+
+/**
+ * Returns true if the voxel node name is a supported surface decoration or farming crop.
+ */
+export function isDecorationOrCropNode(nodeName: string): boolean {
+  return resolveDecorationOrCropKey(nodeName) !== null;
+}
+
+/**
+ * Resolves a voxel node name (trunk, log, leaves, sprout, decoration, or crop) to its canonical tree sprite or sapling key.
  * Prioritizes Minetest Game and Everness authentic textures over MineClone/MCL per user requirement.
  */
 export function resolveSaplingForNode(nodeName: string): string | null {
   if (!nodeName || nodeName === 'air' || nodeName === 'ignore') return null;
   const lower = nodeName.toLowerCase();
+
+  // Check surface decorations & farming crops first
+  const decoOrCropKey = resolveDecorationOrCropKey(nodeName);
+  if (decoOrCropKey) {
+    return decoOrCropKey;
+  }
 
   // Exclude crafted wooden building materials (planks, stairs, slabs, fences, etc.)
   if (
@@ -412,6 +813,15 @@ export function resolveSaplingForNode(nodeName: string): string | null {
     lower.includes('floor')
   ) {
     return null;
+  }
+
+  // 0. X Farming Trees & Cacti
+  if (lower.startsWith('x_farming:')) {
+    if (lower.includes('kiwi')) return 'x_farming:kiwi_sapling';
+    if (lower.includes('pine_nut')) return 'x_farming:pine_nut_sapling';
+    if (lower.includes('christmas_tree')) return 'x_farming:christmas_tree_sapling';
+    if (lower.includes('large_cactus') && lower.includes('seedling')) return 'x_farming:large_cactus_seedling';
+    if (lower.includes('cactus')) return 'default:cactus';
   }
 
   // 1. Everness Mod (Authentic textures)

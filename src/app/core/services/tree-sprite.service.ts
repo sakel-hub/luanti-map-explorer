@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import type maplibregl from 'maplibre-gl';
 import { MapStore } from '../state/map.store';
 import { CoordProjectionService } from './coord-projection.service';
-import { loadAndRegisterSaplingTextures } from '../data/sapling-registry';
+import { isDecorationOrCropKey, loadAndRegisterSaplingTextures } from '../data/sapling-registry';
 
 export const TREE_SPRITES_SOURCE_ID = 'luanti-trees';
 export const TREE_SPRITES_LAYER_ID = 'luanti-trees-layer';
@@ -254,8 +254,9 @@ export class TreeSpriteService {
 
             if (wx < minX || wx > maxCoordX || wz < minZ || wz > maxCoordZ) continue;
 
-            const giant = isGiant(a.saplingKey);
-            const mergeRadius = giant ? 5 : 3;
+            const isDecoOrCrop = isDecorationOrCropKey(a.saplingKey);
+            const giant = !isDecoOrCrop && isGiant(a.saplingKey);
+            const mergeRadius = isDecoOrCrop ? 2 : giant ? 5 : 3;
 
             // Check spatial grid in neighboring cells
             const cx = Math.floor(wx / CELL_SIZE);

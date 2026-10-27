@@ -9,7 +9,11 @@ import {
   VerticalSlicePresetId
 } from '../models/world.model';
 import { LUANTI_NODE_COLORS, resolveNodeColor } from '../data/node-colors';
-import { resolveSaplingForNode } from '../data/sapling-registry';
+import {
+  isDecorationOrCropKey,
+  resolveDecorationOrCropKey,
+  resolveSaplingForNode
+} from '../data/sapling-registry';
 import { LuantiWorldSynthesizer, createDefaultNoiseParams } from './perlin-noise';
 
 function isBiomeGroundSurfaceNode(name: string): boolean {
@@ -31,6 +35,7 @@ function isBiomeGroundSurfaceNode(name: string): boolean {
   }
   return (
     lower.includes('dirt') ||
+    lower.includes('soil') ||
     lower.includes('sand') ||
     lower.includes('snow') ||
     lower.includes('ice') ||
@@ -742,6 +747,12 @@ export function mergeParsedBlockIntoCompactSurface(
         const worldTrunkY = b.blockY * 16 + (col.trunkLocalY ?? col.topLocalY);
         treeCandidates.push({ lx: col.localX, lz: col.localZ, y: worldTrunkY, saplingKey });
       }
+    } else if (!col.hasAirGapBelow && !isPlayerStructuralNode(col.nodeName)) {
+      const decoOrCropKey = resolveDecorationOrCropKey(col.nodeName);
+      if (decoOrCropKey) {
+        const worldDecoY = b.blockY * 16 + col.topLocalY;
+        treeCandidates.push({ lx: col.localX, lz: col.localZ, y: worldDecoY, saplingKey: decoOrCropKey });
+      }
     }
   }
 
@@ -756,8 +767,8 @@ export function mergeParsedBlockIntoCompactSurface(
       key.includes('emergent') ||
       key.includes('big_tree');
 
-    // Cluster proximate trunk columns of the same species into 1 tree centroid.
-    // Giant trees (8-15 blocks wide) use radius 5; standard flora use radius 3.
+    // Cluster proximate trunk/decoration/crop columns of the same species into 1 centroid.
+    // Giant trees (8-15 blocks wide) use radius 5; standard trees use radius 3; decorations/crops use radius 2.
     const clusters: Array<{
       lxSum: number;
       lzSum: number;
@@ -768,7 +779,8 @@ export function mergeParsedBlockIntoCompactSurface(
 
     for (let cIdx = 0; cIdx < treeCandidates.length; cIdx++) {
       const c = treeCandidates[cIdx];
-      const matchRadius = isGiantSpecies(c.saplingKey) ? 5 : 3;
+      const isDecoOrCrop = isDecorationOrCropKey(c.saplingKey);
+      const matchRadius = isDecoOrCrop ? 2 : isGiantSpecies(c.saplingKey) ? 5 : 3;
       let matchedCluster: (typeof clusters)[number] | null = null;
       for (let clIdx = 0; clIdx < clusters.length; clIdx++) {
         const cl = clusters[clIdx];
@@ -801,21 +813,31 @@ export function mergeParsedBlockIntoCompactSurface(
       const cl = clusters[clIdx];
       const lx = Math.round(cl.lxSum / cl.count);
       const lz = Math.round(cl.lzSum / cl.count);
-      const isGiantTree = isGiantSpecies(cl.saplingKey);
-      const mergeRadius = isGiantTree ? 5 : 3;
-      const scale = isGiantTree
-        ? cl.count >= 8
-          ? 2.0
-          : cl.count >= 4
-            ? 1.7
-            : 1.4
-        : cl.count >= 4
-          ? 1.4
+      const isDecoOrCrop = isDecorationOrCropKey(cl.saplingKey);
+      const isGiantTree = !isDecoOrCrop && isGiantSpecies(cl.saplingKey);
+      const mergeRadius = isDecoOrCrop ? 2 : isGiantTree ? 5 : 3;
+      const scale = isDecoOrCrop
+        ? cl.count >= 5
+          ? 0.75
           : cl.count >= 2
-            ? 1.2
-            : 1.0;
+            ? 0.62
+            : 0.5
+        : isGiantTree
+          ? cl.count >= 8
+            ? 2.0
+            : cl.count >= 4
+              ? 1.7
+              : 1.4
+          : cl.count >= 4
+            ? 1.4
+            : cl.count >= 2
+              ? 1.2
+              : 1.0;
       const existingIdx = blk.treeAnchors.findIndex(
-        a => Math.abs(a.lx - lx) <= mergeRadius && Math.abs(a.lz - lz) <= mergeRadius
+        a =>
+          (isDecoOrCrop ? a.saplingKey === cl.saplingKey : !isDecorationOrCropKey(a.saplingKey)) &&
+          Math.abs(a.lx - lx) <= mergeRadius &&
+          Math.abs(a.lz - lz) <= mergeRadius
       );
       if (existingIdx >= 0) {
         blk.treeAnchors[existingIdx] = {
