@@ -59,6 +59,12 @@ export interface TranslationDictionary {
     themeDark: string;
     themeLight: string;
     installApp: string;
+    installShort: string;
+    appSection: string;
+    appInstalled: string;
+    appInstalledDesc: string;
+    installGuideTitle: string;
+    installGuideDesc: string;
     modeSeedShort: string;
     modeHybridShort: string;
     modeDbShort: string;

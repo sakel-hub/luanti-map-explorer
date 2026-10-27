@@ -25,7 +25,26 @@
 
     <!-- Icons & Manifest -->
     <link rel="icon" type="image/svg+xml" href="logo.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
+
+    <!-- Early PWA Install Prompt Capture (prevents race conditions before Angular boots) -->
+    <script>
+      (function () {
+        window.__pwaInstallPrompt = null;
+        window.addEventListener('beforeinstallprompt', function (event) {
+          event.preventDefault();
+          window.__pwaInstallPrompt = event;
+          window.dispatchEvent(new CustomEvent('pwa-install-prompt-ready', { detail: event }));
+        });
+        window.addEventListener('appinstalled', function () {
+          window.__pwaInstallPrompt = null;
+          window.dispatchEvent(new CustomEvent('pwa-installed'));
+        });
+      })();
+    </script>
 
     <!-- OpenGraph / Facebook -->
     <meta property="og:type" content="website" />
