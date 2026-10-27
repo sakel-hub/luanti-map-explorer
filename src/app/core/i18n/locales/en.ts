@@ -60,7 +60,13 @@ export const en: TranslationDictionary = {
     docsAndSharingSection: 'Documentation & Sharing',
     preferencesSection: 'Preferences',
     offlineBadge: 'Offline Mode',
-    updateAvailable: 'Update Ready — Reload'
+    updateAvailable: 'New version available!',
+    updateNow: 'Update & Reload',
+    checkForUpdates: 'Check for Updates',
+    checkingUpdates: 'Checking for updates...',
+    upToDate: 'App is up to date',
+    clearCache: 'Clear Cache & Reload',
+    clearCacheConfirm: 'Are you sure? This will clear offline caches, unregister service workers, and reload the latest version.'
   },
   worldPanel: {
     title: 'World & Seed Controls',

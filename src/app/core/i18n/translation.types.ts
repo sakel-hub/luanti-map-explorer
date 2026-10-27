@@ -75,6 +75,12 @@ export interface TranslationDictionary {
     preferencesSection: string;
     offlineBadge: string;
     updateAvailable: string;
+    updateNow: string;
+    checkForUpdates: string;
+    checkingUpdates: string;
+    upToDate: string;
+    clearCache: string;
+    clearCacheConfirm: string;
   };
   worldPanel: {
     title: string;

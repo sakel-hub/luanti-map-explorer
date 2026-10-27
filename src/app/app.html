@@ -315,4 +315,27 @@
       </div>
     </div>
   }
+  <!-- Floating PWA Update Notification Banner -->
+  @if (pwaUpdateService.updateAvailable()) {
+    <div
+      role="alert"
+      class="fixed bottom-16 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2.5 rounded-xl bg-slate-900/95 border border-sky-500/50 shadow-2xl backdrop-blur-md text-xs text-slate-100 animate-slide-up">
+      <span class="flex h-2.5 w-2.5 relative">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+      </span>
+      <span class="font-medium">{{ 'header.updateAvailable' | translate }}</span>
+      <button
+        (click)="pwaUpdateService.activateUpdate()"
+        class="px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-semibold transition shadow">
+        {{ 'header.updateNow' | translate }}
+      </button>
+      <button
+        (click)="pwaUpdateService.dismissBanner()"
+        aria-label="Dismiss update notification"
+        class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition">
+        <svg lucideX class="w-4 h-4"></svg>
+      </button>
+    </div>
+  }
 </div>

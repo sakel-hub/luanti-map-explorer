@@ -8,6 +8,7 @@ import { KeyboardShortcutsService } from '../../core/services/keyboard-shortcuts
 import { ThemeService } from '../../core/services/theme.service';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { PwaStorageService } from '../../core/services/pwa-storage.service';
+import { PwaUpdateService } from '../../core/services/pwa-update.service';
 
 describe('HeaderComponent', () => {
   let component: HeaderComponent;
@@ -22,7 +23,8 @@ describe('HeaderComponent', () => {
       KeyboardShortcutsService,
       ThemeService,
       TranslationService,
-      PwaStorageService
+      PwaStorageService,
+      PwaUpdateService
     ], null as any);
     component = runInInjectionContext(injector, () => new HeaderComponent());
   });
@@ -39,6 +41,23 @@ describe('HeaderComponent', () => {
 
     component.closeMobileMenu();
     expect(component.showMobileMenu()).toBe(false);
+  });
+
+  it('should toggle and close desktop updates menu', () => {
+    expect(component.showDesktopUpdatesMenu()).toBe(false);
+    component.toggleDesktopUpdatesMenu();
+    expect(component.showDesktopUpdatesMenu()).toBe(true);
+
+    component.closeDesktopUpdatesMenu();
+    expect(component.showDesktopUpdatesMenu()).toBe(false);
+  });
+
+  it('should close desktop updates menu on escape keydown', () => {
+    component.toggleDesktopUpdatesMenu();
+    expect(component.showDesktopUpdatesMenu()).toBe(true);
+
+    component.onEscape();
+    expect(component.showDesktopUpdatesMenu()).toBe(false);
   });
 
   it('should close mobile menu on escape keydown', () => {

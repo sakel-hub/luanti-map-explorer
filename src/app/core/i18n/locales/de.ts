@@ -52,7 +52,13 @@ export const de: TranslationDictionary = {
     installGuideTitle: 'Als Web-App installieren',
     installGuideDesc: 'Um die App auf Ihrem Telefon zu installieren, öffnen Sie das Browser-Menü (⋮) und tippen Sie auf „Zum Startbildschirm hinzufügen“ oder „App installieren“.',
     offlineBadge: 'Offline-Modus',
-    updateAvailable: 'Update bereit — Neu laden'
+    updateAvailable: 'Neue Version verfügbar!',
+    updateNow: 'Aktualisieren & Neu laden',
+    checkForUpdates: 'Nach Updates suchen',
+    checkingUpdates: 'Suche nach Updates...',
+    upToDate: 'App ist aktuell',
+    clearCache: 'Cache leeren & Neu laden',
+    clearCacheConfirm: 'Sind Sie sicher? Dadurch wird der Offline-Cache geleert und die neueste Version geladen.'
   },
   worldPanel: {
     ...en.worldPanel,

@@ -53,7 +53,13 @@ export const ru: TranslationDictionary = {
     installGuideTitle: 'Установить как веб-приложение',
     installGuideDesc: 'Чтобы установить на телефон, откройте меню браузера (⋮) и выберите «Добавить на главный экран» или «Установить приложение».',
     offlineBadge: 'Офлайн-режим',
-    updateAvailable: 'Доступно обновление — Обновить'
+    updateAvailable: 'Доступна новая версия!',
+    updateNow: 'Обновить и перезагрузить',
+    checkForUpdates: 'Проверить обновления',
+    checkingUpdates: 'Проверка обновлений...',
+    upToDate: 'Приложение обновлено',
+    clearCache: 'Очистить кэш и перезагрузить',
+    clearCacheConfirm: 'Вы уверены? Это очистит кэш и перезагрузит последнюю версию приложения.'
   },
   worldPanel: {
     ...en.worldPanel,

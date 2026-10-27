@@ -53,7 +53,13 @@ export const fr: TranslationDictionary = {
     installGuideTitle: 'Installer en tant qu’application web',
     installGuideDesc: 'Pour installer sur votre téléphone, ouvrez le menu du navigateur (⋮) et appuyez sur « Ajouter à l’écran d’accueil » ou « Installer l’application ».',
     offlineBadge: 'Mode Hors-ligne',
-    updateAvailable: 'Mise à jour prête — Recharger'
+    updateAvailable: 'Nouvelle version disponible !',
+    updateNow: 'Mettre à jour et recharger',
+    checkForUpdates: 'Vérifier les mises à jour',
+    checkingUpdates: 'Vérification des mises à jour...',
+    upToDate: 'L\'application est à jour',
+    clearCache: 'Vider le cache et recharger',
+    clearCacheConfirm: 'Êtes-vous sûr ? Cela videra les caches hors ligne et rechargera la dernière version.'
   },
   worldPanel: {
     ...en.worldPanel,

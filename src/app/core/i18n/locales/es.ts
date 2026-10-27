@@ -53,7 +53,13 @@ export const es: TranslationDictionary = {
     installGuideTitle: 'Instalar como app web',
     installGuideDesc: 'Para instalar en el teléfono, abra el menú del navegador (⋮) y toque "Añadir a pantalla de inicio" o "Instalar aplicación".',
     offlineBadge: 'Modo sin conexión',
-    updateAvailable: 'Actualización lista — Recargar'
+    updateAvailable: '¡Nueva versión disponible!',
+    updateNow: 'Actualizar y recargar',
+    checkForUpdates: 'Buscar actualizaciones',
+    checkingUpdates: 'Buscando actualizaciones...',
+    upToDate: 'La aplicación está actualizada',
+    clearCache: 'Borrar caché y recargar',
+    clearCacheConfirm: '¿Estás seguro? Esto borrará la caché sin conexión y recargará la última versión.'
   },
   worldPanel: {
     ...en.worldPanel,

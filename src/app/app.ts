@@ -15,6 +15,7 @@ import { WorldLoaderService } from './core/services/world-loader.service';
 import { RoutePlannerService } from './core/services/route-planner.service';
 import { KeyboardShortcutsService } from './core/services/keyboard-shortcuts.service';
 import { TranslationService } from './core/i18n/translation.service';
+import { PwaUpdateService } from './core/services/pwa-update.service';
 import { TranslatePipe } from './core/i18n/translate.pipe';
 import { TooltipDirective } from './shared/directives/tooltip.directive';
 import { safeGetItem, safeSetItem } from './core/utils/storage.utils';
@@ -66,6 +67,7 @@ export class App {
   public readonly routePlanner = inject(RoutePlannerService);
   public readonly keyboardShortcuts = inject(KeyboardShortcutsService);
   public readonly translation = inject(TranslationService);
+  public readonly pwaUpdateService = inject(PwaUpdateService);
 
   public readonly activeRightTab = signal<RightTab>('voronoi');
   public readonly showHelpModal = signal<boolean>(false);

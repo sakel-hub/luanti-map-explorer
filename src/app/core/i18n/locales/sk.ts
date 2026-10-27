@@ -60,7 +60,13 @@ export const sk: TranslationDictionary = {
     docsAndSharingSection: 'Dokumentácia a zdieľanie',
     preferencesSection: 'Predvoľby',
     offlineBadge: 'Offline režim',
-    updateAvailable: 'Nová verzia — Obnoviť'
+    updateAvailable: 'K dispozícii je nová verzia!',
+    updateNow: 'Aktualizovať a načítať',
+    checkForUpdates: 'Vyhľadať aktualizácie',
+    checkingUpdates: 'Kontrola aktualizácií...',
+    upToDate: 'Aplikácia je aktuálna',
+    clearCache: 'Vymazať vyrovnávaciu pamäť a načítať',
+    clearCacheConfirm: 'Naozaj chcete pokračovať? Týmto vymažete vyrovnávaciu pamäť a načítate najnovšiu verziu.'
   },
   worldPanel: {
     title: 'Svet a parametre Seedu',

@@ -28,8 +28,10 @@ import {
   LucideGitBranch,
   LucideLanguages,
   LucideWifiOff,
-  LucideRefreshCw
+  LucideRefreshCw,
+  LucideTrash2
 } from '@lucide/angular';
+import { PwaUpdateService } from '../../core/services/pwa-update.service';
 
 @Component({
   selector: 'app-header',
@@ -56,7 +58,8 @@ import {
     LucideGitBranch,
     LucideLanguages,
     LucideWifiOff,
-    LucideRefreshCw
+    LucideRefreshCw,
+    LucideTrash2
   ],
   template: `
     <header
@@ -293,13 +296,90 @@ import {
             </span>
           }
 
-          @if (pwaStorage.updateAvailable()) {
+          <!-- App Updates & Cache Menu (Desktop) -->
+          <div class="relative">
             <button
-              (click)="pwaStorage.applyUpdate()"
-              [appTooltip]="'header.updateAvailable' | translate"
-              class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-semibold shadow transition">
-              <svg lucideRefreshCw class="w-3 h-3"></svg>
-              <span>{{ 'header.updateAvailable' | translate }}</span>
+              (click)="toggleDesktopUpdatesMenu()"
+              [appTooltip]="'header.checkForUpdates' | translate"
+              class="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition relative flex items-center justify-center">
+              <svg lucideRefreshCw class="w-4 h-4" [class.animate-spin]="pwaUpdateService.checkingForUpdate()"></svg>
+              @if (pwaUpdateService.updateAvailable()) {
+                <span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-slate-950 animate-ping"></span>
+                <span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-slate-950"></span>
+              }
+            </button>
+
+            @if (showDesktopUpdatesMenu()) {
+              <!-- Click-away backdrop -->
+              <div
+                (click)="closeDesktopUpdatesMenu()"
+                class="fixed inset-0 z-40"></div>
+
+              <!-- Updates Popover Dropdown -->
+              <div
+                class="absolute right-0 top-full mt-2 w-64 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-3 z-50 flex flex-col gap-2.5 text-xs animate-menu-in">
+                <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <div class="flex items-center gap-1.5">
+                    <svg lucideRefreshCw class="w-3.5 h-3.5 text-sky-400"></svg>
+                    <span class="font-bold text-slate-200">App Updates & Cache</span>
+                  </div>
+                  <button
+                    (click)="closeDesktopUpdatesMenu()"
+                    class="text-slate-500 hover:text-slate-300 p-0.5 rounded">
+                    <svg lucideX class="w-3.5 h-3.5"></svg>
+                  </button>
+                </div>
+
+                @if (pwaUpdateService.updateAvailable()) {
+                  <button
+                    (click)="pwaUpdateService.activateUpdate(); closeDesktopUpdatesMenu()"
+                    class="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-sky-600 to-emerald-600 hover:from-sky-500 hover:to-emerald-500 text-white font-medium flex items-center justify-between shadow-md transition active:scale-95">
+                    <span class="flex items-center gap-2">
+                      <svg lucideSparkles class="w-3.5 h-3.5"></svg>
+                      <span>{{ 'header.updateNow' | translate }}</span>
+                    </span>
+                    <svg lucideRefreshCw class="w-3.5 h-3.5 animate-spin"></svg>
+                  </button>
+                }
+
+                <button
+                  (click)="pwaUpdateService.checkForUpdate(true)"
+                  [disabled]="pwaUpdateService.checkingForUpdate()"
+                  class="w-full flex items-center justify-between p-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition text-slate-300 disabled:opacity-60">
+                  <span class="flex items-center gap-2 font-medium">
+                    <svg lucideRefreshCw class="w-3.5 h-3.5 text-sky-400" [class.animate-spin]="pwaUpdateService.checkingForUpdate()"></svg>
+                    <span>
+                      @if (pwaUpdateService.checkingForUpdate()) {
+                        {{ 'header.checkingUpdates' | translate }}
+                      } @else if (pwaUpdateService.statusMessage()) {
+                        {{ pwaUpdateService.statusMessage()! | translate }}
+                      } @else {
+                        {{ 'header.checkForUpdates' | translate }}
+                      }
+                    </span>
+                  </span>
+                </button>
+
+                <button
+                  (click)="confirmClearCache(); closeDesktopUpdatesMenu()"
+                  class="w-full flex items-center justify-between p-2 rounded-lg bg-slate-950 hover:bg-red-950/20 border border-slate-800 hover:border-red-800/40 text-slate-400 hover:text-red-300 transition text-[11px]">
+                  <span class="flex items-center gap-2 font-medium">
+                    <svg lucideTrash2 class="w-3.5 h-3.5 text-slate-500"></svg>
+                    <span>{{ 'header.clearCache' | translate }}</span>
+                  </span>
+                </button>
+              </div>
+            }
+          </div>
+
+          <!-- Update Available Button (Desktop) -->
+          @if (pwaUpdateService.updateAvailable()) {
+            <button
+              (click)="pwaUpdateService.activateUpdate()"
+              [appTooltip]="'header.updateNow' | translate"
+              class="flex items-center gap-1.5 bg-gradient-to-r from-sky-500 to-emerald-500 hover:from-sky-400 hover:to-emerald-400 text-white font-medium px-2.5 py-1 rounded shadow animate-pulse transition">
+              <svg lucideRefreshCw class="w-3.5 h-3.5"></svg>
+              <span>{{ 'header.updateNow' | translate }}</span>
             </button>
           }
 
@@ -535,6 +615,51 @@ import {
               </button>
             </div>
           </div>
+
+          <!-- App Updates & Cache -->
+          <div class="space-y-2 pt-2 border-t border-slate-800">
+            <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">App Updates & Cache</label>
+            <div class="flex flex-col gap-2">
+              @if (pwaUpdateService.updateAvailable()) {
+                <button
+                  (click)="pwaUpdateService.activateUpdate(); closeMobileMenu()"
+                  class="w-full py-2.5 px-3 rounded-lg bg-gradient-to-r from-sky-600 to-emerald-600 hover:from-sky-500 hover:to-emerald-500 text-white font-medium flex items-center justify-between shadow-md transition active:scale-95">
+                  <span class="flex items-center gap-2">
+                    <svg lucideSparkles class="w-4 h-4"></svg>
+                    <span>{{ 'header.updateNow' | translate }}</span>
+                  </span>
+                  <svg lucideRefreshCw class="w-3.5 h-3.5 animate-spin"></svg>
+                </button>
+              }
+
+              <button
+                (click)="pwaUpdateService.checkForUpdate(true)"
+                [disabled]="pwaUpdateService.checkingForUpdate()"
+                class="w-full flex items-center justify-between p-2.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700/80 transition text-slate-300 disabled:opacity-60">
+                <span class="flex items-center gap-2 font-medium">
+                  <svg lucideRefreshCw class="w-4 h-4 text-sky-400" [class.animate-spin]="pwaUpdateService.checkingForUpdate()"></svg>
+                  <span>
+                    @if (pwaUpdateService.checkingForUpdate()) {
+                      {{ 'header.checkingUpdates' | translate }}
+                    } @else if (pwaUpdateService.statusMessage()) {
+                      {{ pwaUpdateService.statusMessage()! | translate }}
+                    } @else {
+                      {{ 'header.checkForUpdates' | translate }}
+                    }
+                  </span>
+                </span>
+              </button>
+
+              <button
+                (click)="confirmClearCache(); closeMobileMenu()"
+                class="w-full flex items-center justify-between p-2.5 rounded-lg bg-slate-950 hover:bg-red-950/20 border border-slate-800 hover:border-red-800/40 text-slate-400 hover:text-red-300 transition text-[11px]">
+                <span class="flex items-center gap-2 font-medium">
+                  <svg lucideTrash2 class="w-3.5 h-3.5 text-slate-500"></svg>
+                  <span>{{ 'header.clearCache' | translate }}</span>
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     }
@@ -550,9 +675,11 @@ export class HeaderComponent {
   public readonly themeService = inject(ThemeService);
   public readonly translationService = inject(TranslationService);
   public readonly pwaStorage = inject(PwaStorageService);
+  public readonly pwaUpdateService = inject(PwaUpdateService);
 
   public readonly canInstallPwa = signal<boolean>(false);
   public readonly showMobileMenu = signal<boolean>(false);
+  public readonly showDesktopUpdatesMenu = signal<boolean>(false);
   private deferredPrompt: any = null;
 
   @HostListener('window:beforeinstallprompt', ['$event'])
@@ -566,6 +693,24 @@ export class HeaderComponent {
   onEscape(): void {
     if (this.showMobileMenu()) {
       this.closeMobileMenu();
+    }
+    if (this.showDesktopUpdatesMenu()) {
+      this.closeDesktopUpdatesMenu();
+    }
+  }
+
+  public toggleDesktopUpdatesMenu(): void {
+    this.showDesktopUpdatesMenu.update(v => !v);
+  }
+
+  public closeDesktopUpdatesMenu(): void {
+    this.showDesktopUpdatesMenu.set(false);
+  }
+
+  public confirmClearCache(): void {
+    const msg = this.translationService.t('header.clearCacheConfirm');
+    if (confirm(msg)) {
+      this.pwaUpdateService.forceClearCacheAndReload();
     }
   }
 
