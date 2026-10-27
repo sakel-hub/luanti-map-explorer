@@ -264,16 +264,16 @@ import {
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-1.5">
-            <button
-              type="button"
-              (click)="onOpenDirectoryClicked()"
-              [appTooltip]="'worldPanel.openDirectoryBtn' | translate"
-              class="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-slate-300 font-medium flex items-center justify-center gap-1.5 text-[11px] transition">
-              <svg lucideFolderOpen class="w-3.5 h-3.5 text-sky-400"></svg>
-              <span class="truncate">{{ 'worldPanel.openFolderShort' | translate }}</span>
-            </button>
+          <button
+            type="button"
+            (click)="onOpenDirectoryClicked()"
+            [appTooltip]="'worldPanel.openDirectoryBtn' | translate"
+            class="w-full py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-slate-300 font-medium flex items-center justify-center gap-1.5 text-[11px] transition">
+            <svg lucideFolderOpen class="w-3.5 h-3.5 text-sky-400"></svg>
+            <span class="truncate">{{ 'worldPanel.openFolderShort' | translate }}</span>
+          </button>
 
+          <div class="grid grid-cols-2 gap-1.5">
             <button
               type="button"
               (click)="worldLoader.loadDemoWorld('sqlite3')"
@@ -282,9 +282,7 @@ import {
               <svg lucideDatabase class="w-3.5 h-3.5 text-purple-400"></svg>
               <span class="truncate">Demo (SQLite)</span>
             </button>
-          </div>
 
-          <div class="grid grid-cols-2 gap-1.5">
             <button
               type="button"
               (click)="worldLoader.loadDemoWorld('postgresql')"
@@ -293,18 +291,18 @@ import {
               <svg lucideDatabase class="w-3.5 h-3.5 text-emerald-400"></svg>
               <span class="truncate">Demo (PGSQL)</span>
             </button>
-
-            @if (mapStore.worldDatabase()) {
-              <button
-                type="button"
-                (click)="worldLoader.exportCurrentWorldAsPostgresDump()"
-                [appTooltip]="'worldPanel.exportPostgresBtn' | translate"
-                class="py-1.5 px-2 rounded-lg bg-amber-950/30 hover:bg-amber-900/40 border border-amber-800/50 text-amber-300 font-medium flex items-center justify-center gap-1.5 text-[11px] transition">
-                <svg lucideUpload class="w-3.5 h-3.5 text-amber-400 rotate-180"></svg>
-                <span class="truncate">Export .sql</span>
-              </button>
-            }
           </div>
+
+          @if (mapStore.worldDatabase()) {
+            <button
+              type="button"
+              (click)="worldLoader.exportCurrentWorldAsPostgresDump()"
+              [appTooltip]="'worldPanel.exportPostgresBtn' | translate"
+              class="w-full py-1.5 px-2 rounded-lg bg-amber-950/30 hover:bg-amber-900/40 border border-amber-800/50 text-amber-300 font-medium flex items-center justify-center gap-1.5 text-[11px] transition">
+              <svg lucideUpload class="w-3.5 h-3.5 text-amber-400 rotate-180"></svg>
+              <span class="truncate">Export as PostgreSQL Dump (.sql)</span>
+            </button>
+          }
 
           <div class="pt-1 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/60">
             <div class="flex items-center gap-1.5 truncate">

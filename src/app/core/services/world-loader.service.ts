@@ -2163,7 +2163,18 @@ export class WorldLoaderService {
 
       const dbBlob = await dbRes.blob();
       const metaBlob = await metaRes.blob();
-      const mtBlob = await mtRes.blob();
+
+      // Ensure demo world.mt explicitly reflects the selected backend format and clear title
+      const backendSuffix = backend === 'postgresql' ? 'PostgreSQL' : 'SQLite';
+      let mtText = await mtRes.text().catch(() => '');
+      if (mtText) {
+        mtText = mtText
+          .replace(/world_name\s*=.*$/m, `world_name = Sample Luanti Citadel World (${backendSuffix})`)
+          .replace(/backend\s*=.*$/m, `backend = ${backend === 'postgresql' ? 'postgresql' : 'sqlite3'}`);
+      } else {
+        mtText = `gameid = minetest_game\nworld_name = Sample Luanti Citadel World (${backendSuffix})\nenable_damage = true\ncreative_mode = false\nbackend = ${backend === 'postgresql' ? 'postgresql' : 'sqlite3'}\n`;
+      }
+      const mtBlob = new Blob([mtText], { type: 'text/plain' });
 
       const files: File[] = [
         new File([dbBlob], dbFileName, {
