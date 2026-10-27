@@ -937,6 +937,10 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
     if (protocolRegistered || typeof window === 'undefined') return;
     protocolRegistered = true;
 
+    if (typeof maplibregl.setMaxParallelImageRequests === 'function') {
+      maplibregl.setMaxParallelImageRequests(32);
+    }
+
     maplibregl.addProtocol('luanti', async (params, abortController) => {
       const match = params.url.match(/luanti:\/\/tiles\/(color|terrain-dem)\/(\d+)\/(\d+)\/(\d+)\/(\d+)/);
       if (!match) {
@@ -986,14 +990,14 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
             'luanti-color': {
               type: 'raster',
               tiles: [`luanti://tiles/color/${rev}/{z}/{x}/{y}.png`],
-              tileSize: 128,
+              tileSize: 256,
               minzoom: 0,
               maxzoom: 14
             },
             'luanti-dem': {
               type: 'raster-dem',
               tiles: initial3d ? [`luanti://tiles/terrain-dem/${rev}/{z}/{x}/{y}.png`] : [],
-              tileSize: 64,
+              tileSize: 256,
               minzoom: 0,
               maxzoom: 7,
               encoding: 'mapbox'

@@ -43,8 +43,10 @@ jobs:
         run: npm run test
 
       - name: Build Angular Application
-        # Sets base-href dynamically to /<repo-name>/ so all assets load correctly
-        run: npm run build -- --base-href /${{ github.event.repository.name }}/
+        # Sets base-href to /luanti-map-explorer/ so all assets and routes load correctly on GitHub Pages
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+        run: npm run build -- --base-href /luanti-map-explorer/
 
       - name: SPA 404 Fallback
         # Handles single-page app route refreshes

@@ -11,9 +11,11 @@ import {
 
 interface QueuedJob {
   coordKey: string;
+  configKey: string;
   job: TileRenderJobPayload;
   revision: number;
   cacheKey: string;
+  dispatchedDbVersion?: number;
   resolvers: Array<(buffer: ArrayBuffer) => void>;
   rejecters: Array<(reason?: any) => void>;
 }
@@ -24,7 +26,7 @@ interface WorkerInstance {
   activeJobId: number | null;
 }
 
-const MAX_L1_TILES = 200; // In-memory RAM tile cache for instant 0ms return
+const MAX_L1_TILES = 512; // In-memory RAM tile cache for instant 0ms return
 
 @Injectable({
   providedIn: 'root'
@@ -38,9 +40,11 @@ export class WorkerPoolService {
   private readonly queue: QueuedJob[] = [];
   private readonly pendingMap = new Map<number, QueuedJob>();
   private readonly l1TileCache = new Map<string, ArrayBuffer>();
+  private readonly sessionWrittenL2Keys = new Set<string>();
   private nextJobId = 1;
   private latestRequestedZoom = 6;
   private latestRequestedRevision = 0;
+  private dbStateVersion = 0;
 
   public readonly workerCount = signal<number>(0);
   public readonly activeTasksCount = signal<number>(0);
@@ -132,8 +136,27 @@ export class WorkerPoolService {
 
               const buf: ArrayBuffer | undefined = data.buffer;
               if (buf && buf.byteLength > 0) {
-                this.putL1Tile(pending.cacheKey, buf.slice(0));
-                this.pwaStorage.putTile(pending.cacheKey, buf.slice(0)).catch(() => {});
+                const copy = buf.slice(0);
+                this.putL1Tile(pending.cacheKey, copy);
+                if (pending.dispatchedDbVersion === this.dbStateVersion) {
+                  const currentRev = this.mapStore.renderRevision();
+                  if (currentRev > pending.revision) {
+                    this.putL1Tile(
+                      `${pending.configKey}_r${currentRev}/${pending.coordKey}`,
+                      copy
+                    );
+                  }
+                  if (this.latestRequestedRevision > pending.revision) {
+                    this.putL1Tile(
+                      `${pending.configKey}_r${this.latestRequestedRevision}/${pending.coordKey}`,
+                      copy
+                    );
+                  }
+                }
+                if (!this.mapStore.isLoadingWorld()) {
+                  this.sessionWrittenL2Keys.add(pending.cacheKey);
+                  this.pwaStorage.putTile(pending.cacheKey, copy).catch(() => {});
+                }
               }
               if (buf) {
                 const resolvers = pending.resolvers;
@@ -169,6 +192,7 @@ export class WorkerPoolService {
     blockEntries: Array<[string, CompactBlockSurface]> = [],
     mipmapEntries: Array<[string, MacroMipmapCell]> = []
   ): void {
+    this.dbStateVersion++;
     for (const inst of this.pool) {
       inst.worker.postMessage({
         type: 'SYNC_DB',
@@ -194,6 +218,7 @@ export class WorkerPoolService {
     ) {
       return;
     }
+    this.dbStateVersion++;
     for (const inst of this.pool) {
       inst.worker.postMessage({
         type: 'APPEND_DB_BLOCKS',
@@ -231,7 +256,8 @@ export class WorkerPoolService {
     const customBiomes = this.mapStore.activeBiomes();
     const tierTag = cameraZoom !== undefined && cameraZoom < 6.0 ? 'm' : 'd';
 
-    const cacheKey = `v2_${cfg.seed}_${cfg.mapgen}_${this.mapStore.viewMode()}_${vSlice.presetId}_${vSlice.minY}_${vSlice.maxY}_${vSlice.caveMode ? 1 : 0}_${this.mapStore.isolatedBiomeId() || 'none'}_${this.mapStore.hypsometricMode() ? 1 : 0}_${this.mapStore.hillshadeEnabled() ? 1 : 0}_${this.mapStore.voronoiContoursEnabled() ? 1 : 0}_${this.mapStore.exploredBoundsEnabled() ? 1 : 0}_${tierTag}_r${revision}/${coordKey}`;
+    const configKey = `v3_${cfg.seed}_${cfg.mapgen}_${this.mapStore.viewMode()}_${vSlice.presetId}_${vSlice.minY}_${vSlice.maxY}_${vSlice.caveMode ? 1 : 0}_${this.mapStore.isolatedBiomeId() || 'none'}_${this.mapStore.hypsometricMode() ? 1 : 0}_${this.mapStore.hillshadeEnabled() ? 1 : 0}_${this.mapStore.voronoiContoursEnabled() ? 1 : 0}_${this.mapStore.exploredBoundsEnabled() ? 1 : 0}_${tierTag}`;
+    const cacheKey = `${configKey}_r${revision}/${coordKey}`;
 
     // 1. Check L1 In-Memory RAM Cache (Instant 0ms synchronous return)
     const l1Hit = this.l1TileCache.get(cacheKey);
@@ -240,19 +266,22 @@ export class WorkerPoolService {
     }
 
     // 2. Check L2 IndexedDB Persistent Cache (< 2ms lookup without worker computation)
-    const l2Hit = await this.pwaStorage.getTile(cacheKey);
-    if (abortSignal?.aborted) {
-      throw new DOMException('Aborted', 'AbortError');
-    }
-    if (l2Hit) {
-      this.putL1Tile(cacheKey, l2Hit.slice(0));
-      return l2Hit;
-    }
+    // Skip guaranteed-miss IndexedDB transactions for intermediate streaming revisions > 1
+    if (revision <= 1 || this.sessionWrittenL2Keys.has(cacheKey)) {
+      const l2Hit = await this.pwaStorage.getTile(cacheKey);
+      if (abortSignal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+      if (l2Hit) {
+        this.putL1Tile(cacheKey, l2Hit.slice(0));
+        return l2Hit;
+      }
 
-    // Re-check L1 after async L2 lookup in case an in-flight worker completed while awaiting
-    const l1HitAfterAwait = this.l1TileCache.get(cacheKey);
-    if (l1HitAfterAwait) {
-      return l1HitAfterAwait.slice(0);
+      // Re-check L1 after async L2 lookup in case an in-flight worker completed while awaiting
+      const l1HitAfterAwait = this.l1TileCache.get(cacheKey);
+      if (l1HitAfterAwait) {
+        return l1HitAfterAwait.slice(0);
+      }
     }
 
     const job: TileRenderJobPayload = {
@@ -260,7 +289,7 @@ export class WorkerPoolService {
       zoom,
       cameraZoom,
       tileKind,
-      tileSize: tileKind === 'terrain-dem' ? 64 : 128,
+      tileSize: tileKind === 'terrain-dem' ? 64 : 256,
       minX: bounds.minX,
       maxX: bounds.maxX,
       minZ: bounds.minZ,
@@ -293,7 +322,10 @@ export class WorkerPoolService {
         db?.macroMipmap || null
       );
       this.putL1Tile(cacheKey, buf.slice(0));
-      this.pwaStorage.putTile(cacheKey, buf.slice(0)).catch(() => {});
+      if (!this.mapStore.isLoadingWorld()) {
+        this.sessionWrittenL2Keys.add(cacheKey);
+        this.pwaStorage.putTile(cacheKey, buf.slice(0)).catch(() => {});
+      }
       this.completedTilesCount.update(c => c + 1);
       return buf;
     }
@@ -323,9 +355,14 @@ export class WorkerPoolService {
         abortSignal.addEventListener('abort', onAbort, { once: true });
       };
 
-      // If an in-flight worker job is already rendering this exact cacheKey, Piggyback on it
+      // If an in-flight worker job is already rendering this exact cacheKey (or same coordKey + configKey at the current DB version), piggyback on it
       for (const inFlight of this.pendingMap.values()) {
-        if (inFlight.cacheKey === cacheKey) {
+        if (
+          inFlight.cacheKey === cacheKey ||
+          (inFlight.coordKey === coordKey &&
+            inFlight.configKey === configKey &&
+            inFlight.dispatchedDbVersion === this.dbStateVersion)
+        ) {
           inFlight.resolvers.push(resolve);
           inFlight.rejecters.push(reject);
           attachAbortCleanup(inFlight);
@@ -340,6 +377,7 @@ export class WorkerPoolService {
       if (existingQueued) {
         if (revision >= existingQueued.revision) {
           existingQueued.job = job;
+          existingQueued.configKey = configKey;
           existingQueued.revision = revision;
           existingQueued.cacheKey = cacheKey;
         }
@@ -352,6 +390,7 @@ export class WorkerPoolService {
 
       const queued: QueuedJob = {
         coordKey,
+        configKey,
         job,
         revision,
         cacheKey,
@@ -380,7 +419,7 @@ export class WorkerPoolService {
 
       // Drain tiles in strict FIFO order (prioritizing visible 'color' tiles ahead of 'terrain-dem'
       // mesh tiles) without penalizing horizon/midground zoom levels in 3D pitched views so MapLibre's
-      // 16-slot ImageRequest concurrency window is never starved!
+      // 32-slot ImageRequest concurrency window is never starved!
       let bestIdx = 0;
       let bestScore = -Infinity;
       for (let i = 0; i < this.queue.length; i++) {
@@ -394,6 +433,7 @@ export class WorkerPoolService {
       }
 
       const [nextJob] = this.queue.splice(bestIdx, 1);
+      nextJob.dispatchedDbVersion = this.dbStateVersion;
       idleWorker.busy = true;
       idleWorker.activeJobId = nextJob.job.jobId;
       this.pendingMap.set(nextJob.job.jobId, nextJob);

@@ -317,9 +317,12 @@ export function renderTilePngBuffer(
     !isNonSurfaceSlice &&
     ((macroMipmap && macroMipmap.size > 0) || (blockSurfaces && blockSurfaces.size > 0))
   ) {
-    anchorHeatGrid = new Float32Array(GRID_N * GRID_N);
-    anchorHumGrid = new Float32Array(GRID_N * GRID_N);
-    anchorBlendGrid = new Float32Array(GRID_N * GRID_N);
+    const isDem = job.tileKind === 'terrain-dem';
+    if (!isDem) {
+      anchorHeatGrid = new Float32Array(GRID_N * GRID_N);
+      anchorHumGrid = new Float32Array(GRID_N * GRID_N);
+      anchorBlendGrid = new Float32Array(GRID_N * GRID_N);
+    }
     anchorElevGrid = new Float32Array(GRID_N * GRID_N);
     anchorElevBlendGrid = new Float32Array(GRID_N * GRID_N);
 
@@ -337,21 +340,29 @@ export function renderTilePngBuffer(
           job.waterLevel
         );
         if (anchor) {
-          anchorHeatGrid[gIdx] = anchor.heat;
-          anchorHumGrid[gIdx] = anchor.humidity;
-          anchorBlendGrid[gIdx] = anchor.blend;
+          if (anchorHeatGrid && anchorHumGrid && anchorBlendGrid) {
+            anchorHeatGrid[gIdx] = anchor.heat;
+            anchorHumGrid[gIdx] = anchor.humidity;
+            anchorBlendGrid[gIdx] = anchor.blend;
+          }
           anchorElevGrid[gIdx] = anchor.elev;
           anchorElevBlendGrid[gIdx] = anchor.elevBlend;
         } else {
-          anchorHeatGrid[gIdx] = 50;
-          anchorHumGrid[gIdx] = 50;
-          anchorBlendGrid[gIdx] = 0;
+          if (anchorHeatGrid && anchorHumGrid && anchorBlendGrid) {
+            anchorHeatGrid[gIdx] = 50;
+            anchorHumGrid[gIdx] = 50;
+            anchorBlendGrid[gIdx] = 0;
+          }
           anchorElevGrid[gIdx] = job.waterLevel;
           anchorElevBlendGrid[gIdx] = 0;
         }
       }
     }
   }
+
+  const hasExactDbColumns = !!dbColumns && dbColumns.size > 0;
+  const isMacroTierGlobal =
+    (job.cameraZoom !== undefined && job.cameraZoom < 6.0) || stepX >= 4.0;
 
   if (job.tileKind === 'terrain-dem') {
     const METERS_PER_NODE = 520;
@@ -362,6 +373,7 @@ export function renderTilePngBuffer(
     for (let py = 0; py < size; py++) {
       const wz = job.maxZ - (py + 0.5) * stepZ;
       const rz = Math.floor(wz);
+      const rbz = rz >> 4;
       const rowOffset = py * size;
 
       const gyFloat = (py / Math.max(1, size - 1)) * (GRID_N - 1);
@@ -370,6 +382,9 @@ export function renderTilePngBuffer(
 
       let prevRx = -9999999;
       let prevElev = baseLevel;
+      let prevDbBx = -9999999;
+      let prevDbCanReuse = false;
+      let prevDbSample: SampledDbPixel | null = null;
 
       for (let px = 0; px < size; px++) {
         const wx = job.minX + (px + 0.5) * stepX;
@@ -381,15 +396,26 @@ export function renderTilePngBuffer(
         }
         prevRx = rx;
 
-        const dbSample = sampleDbHierarchy(
-          rx,
-          rz,
-          stepX,
-          blockSurfaces,
-          macroMipmap,
-          dbColumns,
-          job.cameraZoom
-        );
+        const rbx = rx >> 4;
+        let dbSample: SampledDbPixel | null;
+        if (rbx === prevDbBx && prevDbCanReuse) {
+          dbSample = prevDbSample;
+        } else {
+          dbSample = sampleDbHierarchy(
+            rx,
+            rz,
+            stepX,
+            blockSurfaces,
+            macroMipmap,
+            dbColumns,
+            job.cameraZoom
+          );
+          prevDbBx = rbx;
+          prevDbSample = dbSample;
+          prevDbCanReuse =
+            !hasExactDbColumns &&
+            (isMacroTierGlobal || !blockSurfaces || !blockSurfaces.has(`${rbx},${rbz}`));
+        }
 
         let elev: number;
         if (isNonSurfaceSlice && job.viewMode !== 'seed') {
@@ -515,6 +541,9 @@ export function renderTilePngBuffer(
     let prevWaterCellX = -9999999;
     let prevWaterCellZ = -9999999;
     let prevWaterPt: EvaluatedTerrainPoint | null = null;
+    let prevDbBx = -9999999;
+    let prevDbCanReuse = false;
+    let prevDbSample: SampledDbPixel | null = null;
 
     for (let px = 0; px < size; px++) {
       const exactX = job.minX + (px + 0.5) * stepX;
@@ -523,15 +552,25 @@ export function renderTilePngBuffer(
       const prevWorldX = Math.floor(exactX - stepX);
       const idx = (py * size + px) * 4;
 
-      const dbSample = sampleDbHierarchy(
-        worldX,
-        worldZ,
-        stepX,
-        blockSurfaces,
-        macroMipmap,
-        dbColumns,
-        job.cameraZoom
-      );
+      let dbSample: SampledDbPixel | null;
+      if (blockX === prevDbBx && prevDbCanReuse) {
+        dbSample = prevDbSample;
+      } else {
+        dbSample = sampleDbHierarchy(
+          worldX,
+          worldZ,
+          stepX,
+          blockSurfaces,
+          macroMipmap,
+          dbColumns,
+          job.cameraZoom
+        );
+        prevDbBx = blockX;
+        prevDbSample = dbSample;
+        prevDbCanReuse =
+          !hasExactDbColumns &&
+          (isMacroTierGlobal || !blockSurfaces || !blockSurfaces.has(`${blockX},${blockZ}`));
+      }
 
       // 1. Pure DB Mode when pixel is outside decoded SQLite blocks/mipmaps
       if (job.viewMode === 'db' && !dbSample) {
