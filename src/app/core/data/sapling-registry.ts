@@ -60,7 +60,12 @@ export const SAPLING_TEXTURE_ENTRIES: SaplingTextureEntry[] = [
   { key: 'mcl_core:darksapling', file: 'mcl_core_sapling_big_oak.png' },
   { key: 'mcl_cherry_blossom:cherrysapling', file: 'mcl_cherry_blossom_sapling.png' },
   { key: 'mcl_bamboo:bamboo_shoot', file: 'mcl_bamboo_bamboo_shoot.png' },
-  { key: 'mcl_core:cactus', file: 'mcl_core_cactus_side.png' }
+  { key: 'mcl_core:cactus', file: 'mcl_core_cactus_side.png' },
+
+  // Asuna
+  { key: 'japaneseforest:japanese_sapling_1', file: 'mcl_cherry_blossom_sapling.png' },
+  { key: 'japaneseforest:japanese_sapling_2', file: 'mcl_cherry_blossom_sapling.png' },
+  { key: 'japaneseforest:japanese_sapling_3', file: 'mcl_cherry_blossom_sapling.png' }
 ];
 
 export interface TreeCompositeEntry {
@@ -473,6 +478,30 @@ export function resolveSaplingForNode(nodeName: string): string | null {
       return 'ethereal:bamboo';
     }
     if (lower.includes('palm')) return 'everness:palm_tree';
+  }
+
+  // 3.5 Asuna mods (japaneseforest, naturalbiomes)
+  if (lower.startsWith('japaneseforest:')) {
+    if (lower.includes('sapling') || lower.includes('leaves') || lower.includes('tree')) {
+      return 'mcl_cherry_blossom:cherrysapling';
+    }
+  }
+  if (lower.startsWith('naturalbiomes:')) {
+    if (lower.includes('alppine1') || lower.includes('alppine2')) {
+      return 'default:pine_tree';
+    }
+    if (lower.includes('cowberry')) {
+      return 'default:blueberry_bush_sapling';
+    }
+    if (lower.includes('palm')) {
+      return 'everness:palm_tree';
+    }
+    if (lower.includes('alder')) {
+      return 'default:aspen_tree';
+    }
+    if (lower.includes('bamboo')) {
+      return 'everness:bamboo';
+    }
   }
 
   // 4. Minetest Game (Default - Core Voxel Composite Trees)

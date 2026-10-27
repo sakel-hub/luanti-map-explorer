@@ -5,7 +5,6 @@ export type ViewMode = 'seed' | 'db' | 'hybrid';
 export type AltitudeBand = 'all' | 'ocean' | 'lowland' | 'highland' | 'underground';
 export type BiomePaletteMode = 'auto' | 'all' | 'vanilla' | 'everness' | 'ethereal' | 'mineclone';
 export type MapMarkerCategory = 'base' | 'portal' | 'dungeon' | 'resource' | 'poi';
-export type ExtrusionFilterMode = 'all' | 'pillars' | 'structures' | 'off';
 
 export interface MapMarker {
   id: string;
@@ -103,6 +102,8 @@ export interface ParsedColumnSurface {
   nodeName: string;
   color: [number, number, number];
   waterDepth: number;
+  contiguousSpan?: number;
+  hasAirGapBelow?: boolean;
 }
 
 /**
@@ -120,15 +121,21 @@ export interface CompactBlockSurface {
   groundY?: Int16Array;
   /** 256 Uint8 values: waterDepth per (lz * 16 + lx) */
   waterDepth: Uint8Array;
+  /** String palette of unique surface node names present in this 16x16 block */
+  palette?: string[];
+  /** 256 Uint8 indices into palette per (lz * 16 + lx) column */
+  nodeIndex?: Uint8Array;
   /** Representative / dominant node name in this 16x16 block */
   dominantNode: string;
   /** Precomputed average color & elevation for fast zoomed-out LOD rendering */
   avgColor: [number, number, number];
   avgY: number;
-  /** Number of surface columns containing player-crafted, structural, or vertical pillar nodes */
+  /** Number of surface columns containing player-crafted or structural building nodes */
   playerNodeCount?: number;
-  /** 256 Uint8 values: 0 = None, 1 = Structure, 2 = Bamboo/Cactus, 3 = Crystal Pillar */
+  /** 256 Uint8 values (lazily allocated only when playerNodeCount > 0): 0 = None, 1 = 3D Building */
   extrusionKind?: Uint8Array;
+  /** 256 Uint8 values (lazily allocated with extrusionKind): verified vertical structural height in nodes (0..18) */
+  extrusionSpan?: Uint8Array;
   /** Detected tree / flora anchor points */
   treeAnchors?: TreeAnchorPoint[];
 }
@@ -171,6 +178,8 @@ export interface ParsedMapBlockSummary {
     localZ: number;
     topLocalY: number;
     groundLocalY?: number;
+    floorLocalY?: number;
+    bottomLocalY?: number;
     contiguousSpan?: number;
     hasAirGapBelow?: boolean;
     nodeName: string;

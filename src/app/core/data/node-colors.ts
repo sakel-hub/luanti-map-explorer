@@ -797,6 +797,38 @@ export const LUANTI_NODE_COLORS: Record<string, [number, number, number]> = {
   'mcl_sculk:catalyst': [5, 15, 21],
   'mcl_sculk:sculk': [5, 15, 21],
   'mcl_sculk:vein': [6, 18, 24],
+
+  // --- Asuna / Biomes Mod (japaneseforest:*) ---
+  'japaneseforest:japanese_tree': [142, 94, 72],
+  'japaneseforest:japanese_wood': [196, 152, 118],
+  'japaneseforest:japanese_leaves_1': [238, 175, 192],
+  'japaneseforest:japanese_leaves_2': [228, 155, 178],
+  'japaneseforest:japanese_leaves_3': [218, 145, 168],
+  'japaneseforest:japanese_dirt_with_grass': [72, 122, 38],
+  'japaneseforest:tatami_simple': [194, 182, 134],
+  'japaneseforest:japanese_tatami': [194, 182, 134],
+  'japaneseforest:mud': [78, 62, 50],
+  'japaneseforest:mud_block': [82, 66, 54],
+  'japaneseforest:mud_brick': [88, 70, 58],
+  'japaneseforest:dark_brick': [68, 62, 60],
+  'japaneseforest:japanese_lamp': [245, 230, 180],
+
+  // --- Asuna / Natural Biomes (naturalbiomes:*) ---
+  'naturalbiomes:alpine_litter': [104, 98, 72],
+  'naturalbiomes:alpine_rock': [138, 138, 142],
+  'naturalbiomes:alppine1_trunk': [136, 102, 74],
+  'naturalbiomes:alppine1_wood': [178, 142, 108],
+  'naturalbiomes:alppine1_leaves': [44, 92, 48],
+  'naturalbiomes:alppine2_trunk': [120, 88, 64],
+  'naturalbiomes:alppine2_wood': [164, 130, 96],
+  'naturalbiomes:alppine2_leaves': [38, 84, 42],
+  'naturalbiomes:mediterran_litter': [132, 120, 84],
+  'naturalbiomes:mediterran_rock': [168, 154, 138],
+  'naturalbiomes:heath_litter': [114, 88, 64],
+  'naturalbiomes:heath_litter2': [118, 92, 68],
+  'naturalbiomes:alderswamp_litter': [64, 58, 44],
+  'naturalbiomes:outback_litter': [184, 98, 54],
+  'naturalbiomes:palmbeach': [224, 214, 168],
 };
 export function resolveNodeColor(nodeName: string): [number, number, number] {
   if (LUANTI_NODE_COLORS[nodeName]) {
@@ -893,6 +925,47 @@ export function resolveNodeColor(nodeName: string): [number, number, number] {
   ) {
     return [164, 131, 89];
   }
+  // Asuna mods
+  if (lower.startsWith('japaneseforest:')) {
+    if (lower.includes('leaves')) return [238, 175, 192];
+    if (lower.includes('grass')) return [72, 122, 38];
+    if (lower.includes('tatami')) return [194, 182, 134];
+    if (lower.includes('mud')) return [78, 62, 50];
+    if (lower.includes('tree') || lower.includes('wood')) return [142, 94, 72];
+    if (lower.includes('brick')) return [68, 62, 60];
+  }
+
+  if (lower.startsWith('naturalbiomes:')) {
+    if (lower.includes('leaves')) return [44, 92, 48];
+    if (lower.includes('trunk') || lower.includes('wood')) return [136, 102, 74];
+    if (lower.includes('rock') || lower.includes('stone')) return [138, 138, 142];
+    if (lower.includes('beach') || lower.includes('sand')) return [224, 214, 168];
+    if (lower.includes('outback')) return [184, 98, 54];
+    if (lower.includes('litter')) return [114, 96, 72];
+  }
+
+  // Common stone variants (too_many_stones, moreblocks, etc.)
+  if (
+    lower.includes('andesite') ||
+    lower.includes('diorite') ||
+    lower.includes('granite') ||
+    lower.includes('basalt') ||
+    lower.includes('agate') ||
+    lower.includes('amber') ||
+    lower.includes('amazonite')
+  ) {
+    if (lower.includes('basalt')) return [58, 58, 62];
+    if (lower.includes('andesite')) return [136, 136, 138];
+    if (lower.includes('diorite')) return [186, 186, 188];
+    if (lower.includes('granite')) return [162, 124, 114];
+    if (lower.includes('amber')) return [212, 140, 52];
+    if (lower.includes('amazonite')) return [78, 168, 154];
+    if (lower.includes('purple')) return [138, 92, 168];
+    if (lower.includes('green')) return [82, 138, 92];
+    if (lower.includes('red')) return [168, 72, 64];
+    return [136, 136, 138];
+  }
+
   if (lower.includes('dirt')) return [134, 96, 67];
   if (lower.includes('stone') || lower.includes('cobble') || lower.includes('rock') || lower.includes('ore')) {
     return [97, 94, 93];

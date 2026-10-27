@@ -2100,10 +2100,23 @@ export function resolveBiomeForDbNode(
   const lower = (nodeName || '').toLowerCase();
   const findById = (id: string): BiomeDefinition | undefined =>
     biomes.find(b => b.id === id) ||
-    ETHEREAL_MOD_BIOMES.find(b => b.id === id) ||
-    MINECLONE_GAME_BIOMES.find(b => b.id === id) ||
-    EVERNESS_MOD_BIOMES.find(b => b.id === id) ||
+    (lower.startsWith('ethereal:') ? ETHEREAL_MOD_BIOMES.find(b => b.id === id) : undefined) ||
+    (lower.startsWith('mcl_') ? MINECLONE_GAME_BIOMES.find(b => b.id === id) : undefined) ||
+    (lower.startsWith('everness:') ? EVERNESS_MOD_BIOMES.find(b => b.id === id) : undefined) ||
     DEFAULT_LUANTI_BIOMES.find(b => b.id === id);
+
+  // Decorative or thin player attachments should never dictate terrain biome
+  if (
+    lower.includes('end_rod') ||
+    lower.includes('torch') ||
+    lower.includes('lantern') ||
+    lower.includes('trapdoor') ||
+    lower.includes('fence') ||
+    lower.includes('carpet') ||
+    lower.includes('sign')
+  ) {
+    return fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+  }
 
   // 1. Ocean / Water columns
   if (waterDepth > 0 || lower.includes('water')) {
@@ -2149,22 +2162,62 @@ export function resolveBiomeForDbNode(
     if (lower.includes('sakura')) return findById('ethereal_sakura') || DEFAULT_LUANTI_BIOMES[0];
   }
 
-  // 3. MineClone2 / Mineclonia nodes
+  // 3. MineClone2 / Mineclonia nodes (dimension elevation-gated)
   if (lower.startsWith('mcl_')) {
-    if (lower.includes('crimson')) return findById('mcl_crimson_forest') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower.includes('warped')) return findById('mcl_warped_forest') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower.includes('soul_sand') || lower.includes('soul_soil')) return findById('mcl_soul_sand_valley') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower.includes('netherrack') || lower.startsWith('mcl_nether:')) return findById('mcl_nether_wastes') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower.includes('basalt') || lower.includes('blackstone')) return findById('mcl_basalt_deltas') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower.startsWith('mcl_end:') || lower.includes('end_stone')) return findById('mcl_the_end') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower.includes('mud') || lower.startsWith('mcl_mangrove:')) return findById('mcl_mangrove_swamp') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower.includes('podzol')) return findById('mcl_mega_taiga') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower.includes('mycelium')) return findById('mcl_mushroom_island') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower.includes('hardened_clay') || lower.includes('redsand')) return findById('mcl_mesa') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower.includes('sculk')) return findById('mcl_deep_dark') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower.includes('dirt_with_grass_snow')) return findById('mcl_ice_plains') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower === 'mcl_core:sand') return findById('mcl_desert') || DEFAULT_LUANTI_BIOMES[0];
-    if (lower === 'mcl_core:dirt_with_grass') return findById('mcl_plains') || DEFAULT_LUANTI_BIOMES[0];
+    if (lower.includes('crimson')) return findById('mcl_crimson_forest') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    if (lower.includes('warped')) return findById('mcl_warped_forest') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    if (lower.includes('soul_sand') || lower.includes('soul_soil')) return findById('mcl_soul_sand_valley') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    if (lower.includes('netherrack') || lower.startsWith('mcl_nether:')) {
+      if (elevation < -20000) {
+        return findById('mcl_nether_wastes') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+      }
+      return fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    }
+    if (lower.includes('basalt') || lower.includes('blackstone')) return findById('mcl_basalt_deltas') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    if (lower.startsWith('mcl_end:') || lower.includes('end_stone')) {
+      if (elevation > 5000 || elevation < -25000) {
+        return findById('mcl_the_end') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+      }
+      return fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    }
+    if (lower.includes('mud') || lower.startsWith('mcl_mangrove:')) return findById('mcl_mangrove_swamp') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    if (lower.includes('podzol')) return findById('mcl_mega_taiga') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    if (lower.includes('mycelium')) return findById('mcl_mushroom_island') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    if (lower.includes('hardened_clay') || lower.includes('redsand')) return findById('mcl_mesa') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    if (lower.includes('sculk')) return findById('mcl_deep_dark') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    if (lower.includes('dirt_with_grass_snow')) return findById('mcl_ice_plains') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    if (lower === 'mcl_core:sand') return findById('mcl_desert') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    if (lower === 'mcl_core:dirt_with_grass') return findById('mcl_plains') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+  }
+
+  // 3.5 Asuna mods (japaneseforest, naturalbiomes)
+  if (lower.startsWith('japaneseforest:')) {
+    if (fallbackBiome && (fallbackBiome.id === 'deciduous_forest' || fallbackBiome.id === 'grassland')) {
+      return fallbackBiome;
+    }
+    return findById('deciduous_forest') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+  }
+  if (lower.startsWith('naturalbiomes:')) {
+    if (lower.includes('alpine')) {
+      return elevation >= 48
+        ? findById('alpine_glacier') || findById('highland_meadow') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0]
+        : findById('highland_meadow') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    }
+    if (lower.includes('mediterran')) {
+      return findById('savanna') || findById('deciduous_forest') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    }
+    if (lower.includes('heath')) {
+      return findById('grassland') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    }
+    if (lower.includes('alderswamp')) {
+      return findById('rainforest_swamp') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    }
+    if (lower.includes('outback')) {
+      return findById('savanna') || findById('desert') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    }
+    if (lower.includes('beach')) {
+      return findById('sandstone_desert') || fallbackBiome || DEFAULT_LUANTI_BIOMES[0];
+    }
   }
 
   // 2. Everness Mod surface, ocean & underground nodes
