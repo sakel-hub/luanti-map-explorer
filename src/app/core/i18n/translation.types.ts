@@ -243,7 +243,6 @@ export interface TranslationDictionary {
     models3dLabel: string;
     modelsOff: string;
     modelsStructures: string;
-    modelsAll: string;
     lodWorld: string;
     lodRegion: string;
     lodSector: string;

@@ -36,8 +36,8 @@ describe('TreeSpriteService', () => {
         };
       },
       getLayer: (id: string) => mockLayers[id],
-      addLayer: (config: any) => {
-        mockLayers[config.id] = config;
+      addLayer: (config: any, beforeId?: string) => {
+        mockLayers[config.id] = { ...config, beforeId };
       },
       setLayoutProperty: (layerId: string, prop: string, value: any) => {
         if (mockLayers[layerId]) {
@@ -68,12 +68,14 @@ describe('TreeSpriteService', () => {
     service = new TreeSpriteService(mapStore, projection);
   });
 
-  it('initializes GeoJSON source and symbol layer on MapLibre map', async () => {
+  it('initializes GeoJSON source and symbol layer on MapLibre map (and orders below luanti-3d-buildings-layer)', async () => {
+    mockLayers['luanti-3d-buildings-layer'] = { id: 'luanti-3d-buildings-layer', type: 'fill-extrusion' };
     await service.initialize(mockMap);
 
     expect(mockSources[TREE_SPRITES_SOURCE_ID]).toBeDefined();
     expect(mockLayers[TREE_SPRITES_LAYER_ID]).toBeDefined();
     expect(mockLayers[TREE_SPRITES_LAYER_ID].type).toBe('symbol');
+    expect(mockLayers[TREE_SPRITES_LAYER_ID].beforeId).toBe('luanti-3d-buildings-layer');
     expect(mockLayers[TREE_SPRITES_LAYER_ID].layout['icon-anchor']).toBe('bottom');
     expect(mockLayers[TREE_SPRITES_LAYER_ID].layout['icon-pitch-alignment']).toBe('viewport');
   });

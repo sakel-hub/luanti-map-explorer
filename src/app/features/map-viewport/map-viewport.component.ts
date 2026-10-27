@@ -13,7 +13,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import maplibregl from 'maplibre-gl';
 import { MapStore } from '../../core/state/map.store';
-import { DiscoveredWorldRegion, MapMarker } from '../../core/models/world.model';
+import {
+  CompactBlockSurface,
+  DiscoveredWorldRegion,
+  MapMarker
+} from '../../core/models/world.model';
 import { CoordProjectionService } from '../../core/services/coord-projection.service';
 import { WorkerPoolService } from '../../core/services/worker-pool.service';
 import { WorldLoaderService } from '../../core/services/world-loader.service';
@@ -22,10 +26,7 @@ import { TreeSpriteService } from '../../core/services/tree-sprite.service';
 import { TooltipDirective } from '../../shared/directives/tooltip.directive';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { formatDurationSeconds } from '../../core/utils/format.utils';
-import {
-  classifyColumnExtrusionKind,
-  resolveNodeNameFromExactColor
-} from '../../core/utils/mapblock-parser';
+import { classifyColumnExtrusionKind } from '../../core/utils/mapblock-parser';
 import {
   LucideBox,
   LucideCompass,
@@ -315,11 +316,11 @@ let protocolRegistered = false;
 
             <button
               type="button"
-              (click)="mapStore.cycleExtrusionFilterMode()"
+              (click)="mapStore.toggleBuildingExtrusions3D()"
               [appTooltip]="
                 is3DModelsZoomActive()
-                  ? 'Cycle 3D Extrusions Mode: All (Structures + Bamboo & Crystal Pillars) → Flora & Pillars Only → Structures Only → OFF'
-                  : '3D Voxel Models are rendered in Detail 1:1 view (Z >= 6.0). Click to cycle filter mode or click Detail 1:1 to view 3D structures & pillars.'
+                  ? 'Toggle 3D Buildings Extrusion ON / OFF'
+                  : '3D Buildings are rendered when zoomed in (Z >= 5.2). Click to toggle 3D Buildings ON / OFF.'
               "
               tooltipPosition="bottom"
               [class.bg-emerald-600]="mapStore.buildingExtrusions3dEnabled() && is3DModelsZoomActive()"
@@ -333,7 +334,7 @@ let protocolRegistered = false;
               class="px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition cursor-pointer flex-shrink-0 whitespace-nowrap">
               <svg lucideBox class="w-3 h-3"></svg>
               <span>
-                {{ 'viewport.models3dLabel' | translate }} {{ getExtrusionModeLabel() }}{{ mapStore.buildingExtrusions3dEnabled() && !is3DModelsZoomActive() ? ' (Detail 1:1)' : '' }}
+                {{ 'viewport.models3dLabel' | translate }} {{ (mapStore.buildingExtrusions3dEnabled() ? 'viewport.modelsStructures' : 'viewport.modelsOff') | translate }}
               </span>
             </button>
 
@@ -798,16 +799,8 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
     this.mapStore.setCameraZoomPreset(targetZoom);
   }
 
-  public getExtrusionModeLabel(): string {
-    const mode = this.mapStore.extrusionFilterMode();
-    if (mode === 'all') return 'All (Structures + Flora)';
-    if (mode === 'pillars') return 'Flora & Pillars';
-    if (mode === 'structures') return 'Structures Only';
-    return 'OFF';
-  }
-
   public is3DModelsZoomActive(): boolean {
-    return this.mapStore.cameraState().zoom >= 6.0;
+    return this.mapStore.cameraState().zoom >= 5.2;
   }
 
   private map: maplibregl.Map | null = null;
@@ -817,6 +810,8 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
   private lastDemRevision = -1;
   private lastWasMacroZoomTier: boolean | null = null;
   private hasActiveExtrusionFeatures = false;
+  private lastExtrusionLayerVisible = false;
+  private lastExtrusionStateKey = '';
 
   constructor() {
     try {
@@ -837,13 +832,14 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
         });
       });
 
-      // React to 3D Building & Pillar extrusions separately from 3D DEM tiles
+      // React to 3D Building extrusions ONLY when enabled (zero overhead during DB streaming when 3D buildings are OFF)
       effect(() => {
-        this.mapStore.terrain3dEnabled();
-        this.mapStore.buildingExtrusions3dEnabled();
-        this.mapStore.extrusionFilterMode();
-        this.mapStore.terrainExaggeration();
-        this.mapStore.worldDatabase();
+        const active =
+          this.mapStore.terrain3dEnabled() && this.mapStore.buildingExtrusions3dEnabled();
+        if (active) {
+          this.mapStore.terrainExaggeration();
+          this.mapStore.worldDatabase();
+        }
         untracked(() => {
           this.update3DBuildingExtrusions();
         });
@@ -1046,7 +1042,10 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
               id: 'luanti-3d-buildings-layer',
               type: 'fill-extrusion',
               source: 'luanti-3d-buildings',
-              minzoom: 6,
+              minzoom: 5,
+              layout: {
+                visibility: 'none'
+              },
               paint: {
                 'fill-extrusion-color': ['get', 'color'],
                 'fill-extrusion-height': ['get', 'height'],
@@ -1226,7 +1225,9 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
         const luantiCenter = this.projection.lngLatToLuanti(center.lng, center.lat);
         this.mapStore.saveCameraStateToStorage();
         this.worldLoader.streamViewportBlocks(luantiCenter.x, luantiCenter.z, currentZoom);
-        this.update3DBuildingExtrusions();
+        if (this.mapStore.terrain3dEnabled() && this.mapStore.buildingExtrusions3dEnabled()) {
+          this.update3DBuildingExtrusions();
+        }
         this.treeSprites.updateTreeSprites();
       });
 
@@ -1296,7 +1297,7 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
 
       if (enabled) {
         this.syncDemTilesIfNeeded(this.mapStore.renderRevision());
-        this.map.setMaxPitch(75);
+        this.map.setMaxPitch(70);
         this.map.setTerrain({
           source: 'luanti-dem',
           exaggeration
@@ -1320,7 +1321,13 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
         this.map.setMaxPitch(0);
       }
 
-      this.update3DBuildingExtrusions();
+      if (
+        this.mapStore.buildingExtrusions3dEnabled() ||
+        this.hasActiveExtrusionFeatures ||
+        this.lastExtrusionLayerVisible
+      ) {
+        this.update3DBuildingExtrusions();
+      }
       this.map.triggerRepaint();
     } catch {
       // Retry once style finishes loading
@@ -1835,30 +1842,24 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
 
   private update3DBuildingExtrusions(): void {
     if (!this.map) return;
-    const source = this.map.getSource('luanti-3d-buildings') as maplibregl.GeoJSONSource | undefined;
-    if (!source) return;
 
-    const filterMode = this.mapStore.extrusionFilterMode();
-    const zoom = this.map.getZoom();
     const enabled =
       this.mapStore.terrain3dEnabled() &&
       this.mapStore.buildingExtrusions3dEnabled() &&
-      filterMode !== 'off' &&
-      zoom >= 6.0;
+      this.map.getZoom() >= 5.2;
 
-    if (this.map.getLayer('luanti-3d-buildings-layer')) {
-      this.map.setLayoutProperty(
-        'luanti-3d-buildings-layer',
-        'visibility',
-        enabled ? 'visible' : 'none'
-      );
-    }
-
-    // Extrusions are active only when 3D terrain and building extrusions are enabled in Detail 1:1 view (zoom >= 6.0)
     if (!enabled) {
+      if (this.lastExtrusionLayerVisible && this.map.getLayer('luanti-3d-buildings-layer')) {
+        this.lastExtrusionLayerVisible = false;
+        this.map.setLayoutProperty('luanti-3d-buildings-layer', 'visibility', 'none');
+      }
       if (this.hasActiveExtrusionFeatures) {
         this.hasActiveExtrusionFeatures = false;
-        source.setData({
+        this.lastExtrusionStateKey = '';
+        const source = this.map.getSource('luanti-3d-buildings') as
+          | maplibregl.GeoJSONSource
+          | undefined;
+        source?.setData({
           type: 'FeatureCollection',
           features: []
         });
@@ -1866,10 +1867,19 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
+    const source = this.map.getSource('luanti-3d-buildings') as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    if (!this.lastExtrusionLayerVisible && this.map.getLayer('luanti-3d-buildings-layer')) {
+      this.lastExtrusionLayerVisible = true;
+      this.map.setLayoutProperty('luanti-3d-buildings-layer', 'visibility', 'visible');
+    }
+
     const db = this.mapStore.worldDatabase();
     if (!db) {
       if (this.hasActiveExtrusionFeatures) {
         this.hasActiveExtrusionFeatures = false;
+        this.lastExtrusionStateKey = '';
         source.setData({
           type: 'FeatureCollection',
           features: []
@@ -1893,14 +1903,21 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
     const maxBz = Math.floor(maxZ / 16);
 
     // Guard against excessively large view frustums when camera is tilted at the horizon
-    const blockSpanX = Math.min(64, Math.max(0, maxBx - minBx + 1));
-    const blockSpanZ = Math.min(64, Math.max(0, maxBz - minBz + 1));
+    const blockSpanX = Math.min(72, Math.max(0, maxBx - minBx + 1));
+    const blockSpanZ = Math.min(72, Math.max(0, maxBz - minBz + 1));
     const clampedMaxBx = minBx + blockSpanX;
     const clampedMaxBz = minBz + blockSpanZ;
 
     const METERS_PER_NODE = 520;
     const exaggeration = this.mapStore.terrainExaggeration() || 1;
     const waterLevel = this.mapStore.worldConfig().waterLevel ?? 1;
+
+    const stateKey = `${minBx},${clampedMaxBx},${minBz},${clampedMaxBz},${exaggeration},${waterLevel},${db.blockSurfaces?.size ?? 0},${db.surfaceColumns?.size ?? 0}`;
+    if (stateKey === this.lastExtrusionStateKey && this.hasActiveExtrusionFeatures) {
+      return;
+    }
+    this.lastExtrusionStateKey = stateKey;
+
     const features: Array<{
       type: 'Feature';
       properties: {
@@ -1913,22 +1930,23 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
         coordinates: number[][][];
       };
     }> = [];
-    const MAX_FEATURES = 2000;
+    const MAX_FEATURES = 4096;
 
-    const pushRun = (
+    const pushRect = (
       bx: number,
       bz: number,
-      wz: number,
       startLx: number,
       endLx: number,
+      startLz: number,
+      endLz: number,
       runRelNodes: number,
       runColor: string
     ): void => {
       if (features.length >= MAX_FEATURES) return;
       const wx0 = bx * 16 + startLx;
       const wx1 = bx * 16 + endLx + 1;
-      const wz0 = wz;
-      const wz1 = wz + 1;
+      const wz0 = bz * 16 + startLz;
+      const wz1 = bz * 16 + endLz + 1;
 
       const p0 = this.projection.luantiToLngLat(wx0, wz0);
       const p1 = this.projection.luantiToLngLat(wx1, wz0);
@@ -1937,7 +1955,7 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
 
       // In MapLibre GL's TERRAIN3D shader, fill-extrusion-base and fill-extrusion-height are
       // automatically offset by get_elevation(a_centroid) (which already includes exaggeration).
-      // Setting base_height: 0 anchors the building/pillar bottom into the terrain surface so it never floats!
+      // Setting base_height: 0 anchors the building bottom into the terrain surface so it never floats!
       const baseHeight = 0;
       const topHeight = runRelNodes * METERS_PER_NODE * exaggeration;
 
@@ -1955,103 +1973,202 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
       });
     };
 
-    const matchesFilter = (extKind: number): boolean => {
-      if (extKind <= 0) return false;
-      if (filterMode === 'pillars') return extKind === 2 || extKind === 3;
-      if (filterMode === 'structures') return extKind === 1;
-      return true;
-    };
-
-    // 1. Scan CompactBlockSurfaces for structures, bamboo stalks, and crystal pillars
+    // 1. Scan CompactBlockSurfaces for 3D buildings, prioritized by proximity to camera center
     if (db.blockSurfaces && db.blockSurfaces.size > 0) {
+      const cam = this.mapStore.cameraState();
+      const camBx = cam.x / 16;
+      const camBz = cam.z / 16;
+      const candidateBlocks: Array<{ blk: CompactBlockSurface; distSq: number }> = [];
+
       for (let bz = minBz; bz <= clampedMaxBz; bz++) {
         for (let bx = minBx; bx <= clampedMaxBx; bx++) {
+          const blk = db.blockSurfaces.get(`${bx},${bz}`);
+          if (!blk || !blk.extrusionKind || !blk.playerNodeCount || blk.playerNodeCount <= 0) {
+            continue;
+          }
+          const dx = bx + 0.5 - camBx;
+          const dz = bz + 0.5 - camBz;
+          candidateBlocks.push({ blk, distSq: dx * dx + dz * dz });
+        }
+      }
+
+      if (candidateBlocks.length > 1) {
+        candidateBlocks.sort((a, b) => a.distSq - b.distSq);
+      }
+
+      const openRects: Array<{
+        startLx: number;
+        endLx: number;
+        startLz: number;
+        endLz: number;
+        relNodes: number;
+        color: string;
+      }> = [];
+
+      for (let cIdx = 0; cIdx < candidateBlocks.length; cIdx++) {
+        if (features.length >= MAX_FEATURES) break;
+        const blk = candidateBlocks[cIdx].blk;
+        const bx = blk.bx;
+        const bz = blk.bz;
+        const groundYArr = blk.groundY;
+        const extKindArr = blk.extrusionKind!;
+        const extSpanArr = blk.extrusionSpan;
+
+        openRects.length = 0;
+
+        for (let lz = 0; lz < 16; lz++) {
           if (features.length >= MAX_FEATURES) break;
 
-          const blk = db.blockSurfaces.get(`${bx},${bz}`);
-          if (!blk) continue;
+          let runStartX = -1;
+          let runRelNodes = 0;
+          let runColor = '';
 
-          // Only inspect blocks that have extrudable structure/pillar nodes
-          if (!blk.playerNodeCount || blk.playerNodeCount <= 0) continue;
-
-          const groundYArr = blk.groundY;
-          const extKindArr = blk.extrusionKind;
-
-          for (let lz = 0; lz < 16; lz++) {
-            if (features.length >= MAX_FEATURES) break;
-            const wz = bz * 16 + lz;
-
-            let runStartX = -1;
-            let runRelNodes = 0;
-            let runColor = '';
-
-            for (let lx = 0; lx < 16; lx++) {
-              const idx = (lz << 4) | lx;
-              const topY = blk.topY[idx];
-              if (topY <= -32768 || blk.waterDepth[idx] > 0) {
-                if (runStartX !== -1) {
-                  pushRun(bx, bz, wz, runStartX, lx - 1, runRelNodes, runColor);
-                  runStartX = -1;
-                }
-                continue;
+          const commitRowRun = (sLx: number, eLx: number, rNodes: number, rColor: string) => {
+            for (let rIdx = 0; rIdx < openRects.length; rIdx++) {
+              const rect = openRects[rIdx];
+              if (
+                rect.endLz === lz - 1 &&
+                rect.startLx === sLx &&
+                rect.endLx === eLx &&
+                rect.relNodes === rNodes &&
+                rect.color === rColor
+              ) {
+                rect.endLz = lz;
+                return;
               }
+            }
+            openRects.push({
+              startLx: sLx,
+              endLx: eLx,
+              startLz: lz,
+              endLz: lz,
+              relNodes: rNodes,
+              color: rColor
+            });
+          };
 
-              const cOff = idx * 3;
-              const r = blk.rgb[cOff];
-              const g = blk.rgb[cOff + 1];
-              const b = blk.rgb[cOff + 2];
-
-              let extKind = extKindArr ? extKindArr[idx] : 0;
-              if (!extKindArr) {
-                const nodeName = resolveNodeNameFromExactColor(r, g, b, 0, blk.dominantNode);
-                extKind = classifyColumnExtrusionKind(nodeName);
+          for (let lx = 0; lx < 16; lx++) {
+            const idx = (lz << 4) | lx;
+            const topY = blk.topY[idx];
+            if (topY <= -32768 || blk.waterDepth[idx] > 0) {
+              if (runStartX !== -1) {
+                commitRowRun(runStartX, lx - 1, runRelNodes, runColor);
+                runStartX = -1;
               }
+              continue;
+            }
 
-              if (!matchesFilter(extKind)) {
-                if (runStartX !== -1) {
-                  pushRun(bx, bz, wz, runStartX, lx - 1, runRelNodes, runColor);
-                  runStartX = -1;
-                }
-                continue;
+            let colSpan = extSpanArr ? extSpanArr[idx] : 18;
+            let isBuildingCol = extKindArr[idx] === 1 && colSpan >= 2;
+            if (!isBuildingCol) {
+              // Complete interior roof / courtyard holes surrounded on >= 3 cardinal sides by 3D building columns
+              let neighborCount = 0;
+              let neighborSpanSum = 0;
+              if (lx > 0 && extKindArr[idx - 1] === 1 && (!extSpanArr || extSpanArr[idx - 1] >= 2)) {
+                neighborCount++;
+                neighborSpanSum += extSpanArr ? extSpanArr[idx - 1] : 6;
               }
-
-              const rawGroundY =
-                groundYArr && groundYArr[idx] > -32768 ? groundYArr[idx] : blk.avgY;
-              // Never subtract underwater seabed depth (< waterLevel) for structures/pillars above water!
-              const baseRefY =
-                rawGroundY < waterLevel && topY > waterLevel ? waterLevel : rawGroundY;
-              const rawDiff = topY - baseRefY;
-
-              // Skip 1-block flat decks, floors, paths, or pool rims
-              if (rawDiff < 2) {
-                if (runStartX !== -1) {
-                  pushRun(bx, bz, wz, runStartX, lx - 1, runRelNodes, runColor);
-                  runStartX = -1;
-                }
-                continue;
+              if (lx < 15 && extKindArr[idx + 1] === 1 && (!extSpanArr || extSpanArr[idx + 1] >= 2)) {
+                neighborCount++;
+                neighborSpanSum += extSpanArr ? extSpanArr[idx + 1] : 6;
               }
-
-              const maxAllowedNodes = extKind === 3 ? 32 : extKind === 2 ? 28 : 18;
-              const relNodes = Math.min(maxAllowedNodes, rawDiff);
-              const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-
-              if (runStartX !== -1 && runRelNodes === relNodes && runColor === hex) {
-                // Continue contiguous run
-                continue;
-              } else {
-                if (runStartX !== -1) {
-                  pushRun(bx, bz, wz, runStartX, lx - 1, runRelNodes, runColor);
-                }
-                runStartX = lx;
-                runRelNodes = relNodes;
-                runColor = hex;
+              if (lz > 0 && extKindArr[idx - 16] === 1 && (!extSpanArr || extSpanArr[idx - 16] >= 2)) {
+                neighborCount++;
+                neighborSpanSum += extSpanArr ? extSpanArr[idx - 16] : 6;
+              }
+              if (lz < 15 && extKindArr[idx + 16] === 1 && (!extSpanArr || extSpanArr[idx + 16] >= 2)) {
+                neighborCount++;
+                neighborSpanSum += extSpanArr ? extSpanArr[idx + 16] : 6;
+              }
+              if (neighborCount >= 3) {
+                isBuildingCol = true;
+                colSpan = Math.round(neighborSpanSum / neighborCount);
               }
             }
 
-            if (runStartX !== -1) {
-              pushRun(bx, bz, wz, runStartX, 15, runRelNodes, runColor);
+            if (!isBuildingCol) {
+              if (runStartX !== -1) {
+                commitRowRun(runStartX, lx - 1, runRelNodes, runColor);
+                runStartX = -1;
+              }
+              continue;
+            }
+
+            const rawGroundY =
+              groundYArr && groundYArr[idx] > -32768 && topY - groundYArr[idx] <= 18
+                ? groundYArr[idx]
+                : extSpanArr
+                  ? topY - colSpan
+                  : blk.avgY;
+            // Never subtract underwater seabed depth (< waterLevel) for structures above water
+            const baseRefY =
+              rawGroundY < waterLevel && topY > waterLevel ? waterLevel : rawGroundY;
+            const rawDiff = topY - baseRefY;
+            const relNodes = Math.min(18, rawDiff, colSpan);
+
+            // Skip 1-block flat decks, floors, paths, or pool rims
+            if (relNodes < 2) {
+              if (runStartX !== -1) {
+                commitRowRun(runStartX, lx - 1, runRelNodes, runColor);
+                runStartX = -1;
+              }
+              continue;
+            }
+
+            const cOff = idx * 3;
+            const r = blk.rgb[cOff];
+            const g = blk.rgb[cOff + 1];
+            const b = blk.rgb[cOff + 2];
+
+            const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+
+            if (runStartX !== -1 && runRelNodes === relNodes && runColor === hex) {
+              continue;
+            } else {
+              if (runStartX !== -1) {
+                commitRowRun(runStartX, lx - 1, runRelNodes, runColor);
+              }
+              runStartX = lx;
+              runRelNodes = relNodes;
+              runColor = hex;
             }
           }
+
+          if (runStartX !== -1) {
+            commitRowRun(runStartX, 15, runRelNodes, runColor);
+          }
+
+          // Flush rectangles that did not extend into the current lz row
+          for (let rIdx = openRects.length - 1; rIdx >= 0; rIdx--) {
+            const rect = openRects[rIdx];
+            if (rect.endLz < lz) {
+              pushRect(
+                bx,
+                bz,
+                rect.startLx,
+                rect.endLx,
+                rect.startLz,
+                rect.endLz,
+                rect.relNodes,
+                rect.color
+              );
+              openRects.splice(rIdx, 1);
+            }
+          }
+        }
+
+        for (let rIdx = 0; rIdx < openRects.length; rIdx++) {
+          const rect = openRects[rIdx];
+          pushRect(
+            bx,
+            bz,
+            rect.startLx,
+            rect.endLx,
+            rect.startLz,
+            rect.endLz,
+            rect.relNodes,
+            rect.color
+          );
         }
       }
     }
@@ -2061,8 +2178,7 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
       for (const col of db.surfaceColumns.values()) {
         if (features.length >= MAX_FEATURES) break;
         if (col.x < minX || col.x > maxX || col.z < minZ || col.z > maxZ) continue;
-        const extKind = classifyColumnExtrusionKind(col.nodeName);
-        if (!matchesFilter(extKind)) continue;
+        if (classifyColumnExtrusionKind(col.nodeName) !== 1) continue;
 
         const p0 = this.projection.luantiToLngLat(col.x, col.z);
         const p1 = this.projection.luantiToLngLat(col.x + 1, col.z);

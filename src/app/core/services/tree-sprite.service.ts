@@ -40,47 +40,54 @@ export class TreeSpriteService {
     }
 
     // 2. Ensure symbol layer exists with camera-facing viewport alignment and scaling
+    // Place below luanti-3d-buildings-layer so 3D building walls properly occlude billboard trees behind them
     if (!map.getLayer(TREE_SPRITES_LAYER_ID)) {
-      map.addLayer({
-        id: TREE_SPRITES_LAYER_ID,
-        type: 'symbol',
-        source: TREE_SPRITES_SOURCE_ID,
-        minzoom: 6.5,
-        layout: {
-          'icon-image': ['get', 'saplingKey'],
-          'icon-size': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            6.5,
-            ['*', ['coalesce', ['get', 'scale'], 1.0], 0.4],
-            8.0,
-            ['*', ['coalesce', ['get', 'scale'], 1.0], 0.65],
-            10.0,
-            ['*', ['coalesce', ['get', 'scale'], 1.0], 1.0],
-            12.0,
-            ['*', ['coalesce', ['get', 'scale'], 1.0], 1.35],
-            14.0,
-            ['*', ['coalesce', ['get', 'scale'], 1.0], 1.75]
-          ] as any,
-          'icon-pitch-alignment': 'viewport',
-          'icon-rotation-alignment': 'viewport',
-          'icon-anchor': 'bottom',
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true
+      const beforeId = map.getLayer('luanti-3d-buildings-layer')
+        ? 'luanti-3d-buildings-layer'
+        : undefined;
+      map.addLayer(
+        {
+          id: TREE_SPRITES_LAYER_ID,
+          type: 'symbol',
+          source: TREE_SPRITES_SOURCE_ID,
+          minzoom: 6.5,
+          layout: {
+            'icon-image': ['get', 'saplingKey'],
+            'icon-size': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              6.5,
+              ['*', ['coalesce', ['get', 'scale'], 1.0], 0.4],
+              8.0,
+              ['*', ['coalesce', ['get', 'scale'], 1.0], 0.65],
+              10.0,
+              ['*', ['coalesce', ['get', 'scale'], 1.0], 1.0],
+              12.0,
+              ['*', ['coalesce', ['get', 'scale'], 1.0], 1.35],
+              14.0,
+              ['*', ['coalesce', ['get', 'scale'], 1.0], 1.75]
+            ] as any,
+            'icon-pitch-alignment': 'viewport',
+            'icon-rotation-alignment': 'viewport',
+            'icon-anchor': 'bottom',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true
+          },
+          paint: {
+            'icon-opacity': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              6.5,
+              0.0,
+              7.0,
+              1.0
+            ]
+          }
         },
-        paint: {
-          'icon-opacity': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            6.5,
-            0.0,
-            7.0,
-            1.0
-          ]
-        }
-      });
+        beforeId
+      );
       this.layerAdded = true;
     }
 
@@ -223,12 +230,25 @@ export class TreeSpriteService {
           if (features.length >= MAX_VISIBLE_TREES) break;
 
           const blk = blockSurfaces.get(`${bx},${bz}`);
-          if (!blk || !blk.treeAnchors || blk.treeAnchors.length === 0) continue;
+          const anchors = blk?.treeAnchors;
+          if (!blk || !anchors || anchors.length === 0) continue;
 
-          for (let i = 0; i < blk.treeAnchors.length; i++) {
+          for (let i = 0; i < anchors.length; i++) {
             if (features.length >= MAX_VISIBLE_TREES) break;
 
-            const a = blk.treeAnchors[i];
+            const a = anchors[i];
+            const cellIdx = (a.lz << 4) | a.lx;
+            if (
+              blk.extrusionKind &&
+              blk.extrusionKind[cellIdx] === 1 &&
+              (!blk.extrusionSpan || blk.extrusionSpan[cellIdx] >= 2)
+            ) {
+              continue;
+            }
+            if (blk.topY[cellIdx] > a.y + 14) {
+              continue;
+            }
+
             const wx = bx * 16 + a.lx;
             const wz = bz * 16 + a.lz;
 

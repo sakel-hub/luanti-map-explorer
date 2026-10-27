@@ -6,7 +6,6 @@ import {
   DecodedWorldDatabase,
   DiscoveredWorldRegion,
   ExplorerExportBundle,
-  ExtrusionFilterMode,
   MapMarker,
   MapMarkerCategory,
   MapgenType,
@@ -49,7 +48,6 @@ export interface PersistedUserSettings {
   terrainExaggeration?: number;
   treeSpritesEnabled?: boolean;
   buildingExtrusions3dEnabled?: boolean;
-  extrusionFilterMode?: ExtrusionFilterMode;
   hypsometricMode?: boolean;
   hillshadeEnabled?: boolean;
   chunkGridEnabled?: boolean;
@@ -289,7 +287,6 @@ export class MapStore {
   public readonly terrain3dEnabled = signal<boolean>(false);
   public readonly terrainExaggeration = signal<number>(1.3);
   public readonly buildingExtrusions3dEnabled = signal<boolean>(false);
-  public readonly extrusionFilterMode = signal<ExtrusionFilterMode>('off');
   public readonly hypsometricMode = signal<boolean>(false);
   public readonly hillshadeEnabled = signal<boolean>(true);
   public readonly voronoiContoursEnabled = signal<boolean>(false);
@@ -526,7 +523,6 @@ export class MapStore {
       terrainExaggeration: this.terrainExaggeration(),
       treeSpritesEnabled: this.treeSpritesEnabled(),
       buildingExtrusions3dEnabled: this.buildingExtrusions3dEnabled(),
-      extrusionFilterMode: this.extrusionFilterMode(),
       hypsometricMode: this.hypsometricMode(),
       hillshadeEnabled: this.hillshadeEnabled(),
       chunkGridEnabled: this.chunkGridEnabled(),
@@ -546,9 +542,6 @@ export class MapStore {
       if (typeof s.terrainExaggeration === 'number') this.terrainExaggeration.set(s.terrainExaggeration);
       if (typeof s.treeSpritesEnabled === 'boolean') this.treeSpritesEnabled.set(s.treeSpritesEnabled);
       if (typeof s.buildingExtrusions3dEnabled === 'boolean') this.buildingExtrusions3dEnabled.set(s.buildingExtrusions3dEnabled);
-      if (s.extrusionFilterMode && ['all', 'pillars', 'structures', 'off'].includes(s.extrusionFilterMode)) {
-        this.extrusionFilterMode.set(s.extrusionFilterMode);
-      }
       if (typeof s.hypsometricMode === 'boolean') this.hypsometricMode.set(s.hypsometricMode);
       if (typeof s.hillshadeEnabled === 'boolean') this.hillshadeEnabled.set(s.hillshadeEnabled);
       if (typeof s.chunkGridEnabled === 'boolean') this.chunkGridEnabled.set(s.chunkGridEnabled);
@@ -864,27 +857,12 @@ export class MapStore {
 
   public setBuildingExtrusions3dEnabled(val: boolean): void {
     this.buildingExtrusions3dEnabled.set(val);
-    this.extrusionFilterMode.set(val ? 'all' : 'off');
     this.saveUserSettingsToStorage();
   }
 
-  public setExtrusionFilterMode(mode: ExtrusionFilterMode): void {
-    this.extrusionFilterMode.set(mode);
-    this.buildingExtrusions3dEnabled.set(mode !== 'off');
+  public toggleBuildingExtrusions3D(): void {
+    this.buildingExtrusions3dEnabled.update(v => !v);
     this.saveUserSettingsToStorage();
-  }
-
-  public cycleExtrusionFilterMode(): void {
-    const curr = this.extrusionFilterMode();
-    const next: ExtrusionFilterMode =
-      curr === 'all'
-        ? 'pillars'
-        : curr === 'pillars'
-          ? 'structures'
-          : curr === 'structures'
-            ? 'off'
-            : 'all';
-    this.setExtrusionFilterMode(next);
   }
 
   public toggleTreeSprites(): void {
