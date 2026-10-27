@@ -32,6 +32,7 @@ import {
   resolveBiomeForDbNode
 } from './core/data/default-biomes';
 import { resolveNodeColor, LUANTI_NODE_COLORS } from './core/data/node-colors';
+import { resolveSaplingForNode } from './core/data/sapling-registry';
 import { MapStore } from './core/state/map.store';
 import { WorkerPoolService } from './core/services/worker-pool.service';
 import { WorldLoaderService } from './core/services/world-loader.service';
@@ -1325,6 +1326,73 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     expect(mergedMulti!.avgY).toBe(5);
   });
 
+  it('classifies natural mountain ores, terracotta, and rocks as natural ground without tearing holes or extruding buildings', () => {
+    expect(isNaturalTerrainGroundNode('mcl_copper:copper_ore')).toBe(true);
+    expect(isNaturalTerrainGroundNode('mcl_terracotta:terracotta_purple')).toBe(true);
+    expect(isNaturalTerrainGroundNode('mcl_core:granite')).toBe(true);
+    expect(isNaturalTerrainGroundNode('mcl_core:diorite')).toBe(true);
+    expect(isNaturalTerrainGroundNode('mcl_deepslate:calcite')).toBe(true);
+    expect(isNaturalTerrainGroundNode('mcl_deepslate:tuff')).toBe(true);
+
+    // Natural raw materials should NOT be player structural buildings
+    expect(isPlayerStructuralNode('mcl_copper:copper_ore')).toBe(false);
+    expect(isPlayerStructuralNode('mcl_terracotta:terracotta_purple')).toBe(false);
+    expect(isPlayerStructuralNode('mcl_core:granite')).toBe(false);
+
+    // But crafted/polished items SHOULD remain player structural
+    expect(isPlayerStructuralNode('mcl_terracotta:glazed_terracotta_cyan')).toBe(true);
+    expect(isPlayerStructuralNode('mcl_core:polished_granite')).toBe(true);
+    expect(isPlayerStructuralNode('default:stonebrick')).toBe(true);
+
+    // Test mountain surface merge
+    const testSurfaces = new Map<string, any>();
+    const testMipmap = new Map<string, any>();
+    const mountainBlock: any = {
+      blockX: 0,
+      blockY: 4, // Y = 64..79
+      blockZ: 0,
+      dominantNode: 'mcl_core:sandstone',
+      columns: [
+        {
+          localX: 2,
+          localZ: 2,
+          topLocalY: 10, // Mountain peak copper ore at Y = 74
+          groundLocalY: undefined,
+          nodeName: 'mcl_copper:copper_ore',
+          waterCount: 0
+        },
+        {
+          localX: 3,
+          localZ: 2,
+          topLocalY: 8, // Mountain ridge purple terracotta at Y = 72
+          groundLocalY: undefined,
+          nodeName: 'mcl_terracotta:terracotta_purple',
+          waterCount: 0
+        }
+      ]
+    };
+
+    const blk = mergeParsedBlockIntoCompactSurface(
+      mountainBlock,
+      -32000,
+      32000,
+      testSurfaces,
+      testMipmap,
+      {}
+    );
+
+    expect(blk).toBeDefined();
+    const copperIdx = (2 << 4) | 2;
+    const terracottaIdx = (2 << 4) | 3;
+    expect(blk!.topY[copperIdx]).toBe(74);
+    expect(blk!.groundY![copperIdx]).toBe(74); // Preserves peak elevation, not avgY
+    expect(blk!.topY[terracottaIdx]).toBe(72);
+    expect(blk!.groundY![terracottaIdx]).toBe(72); // Preserves ridge elevation, not avgY
+    // Neither should be classified as 3D building extrusions
+    expect(blk!.extrusionKind ? blk!.extrusionKind[copperIdx] : 0).toBe(0);
+    expect(blk!.extrusionKind ? blk!.extrusionKind[terracottaIdx] : 0).toBe(0);
+  });
+
   it('controls 3D building extrusions state in MapStore', () => {
     safeClearStorage();
     const store = new MapStore();
@@ -1405,31 +1473,70 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     expect(anchoredPt.elevation).toBeLessThan(1);
   });
 
-  it('excludes Everness Mineral Waters pool bricks & ship sails from 3D extrusions while extruding Bamboo & Crystal Pillars', () => {
-    // 1. Everness Mineral Waters travertine pool bricks must resolve to travertine color (not red brick) and never extrude
+  it('detects 3D buildings (including hollow roofs, wool domes, and masonry) while excluding flora/pillars and keeping wilderness blocks zero-allocation', () => {
+    // 1. Everness Mineral Waters travertine pool bricks must resolve to travertine color and never extrude as buildings
     expect(resolveNodeColor('everness:mineral_stone_brick')).toEqual([222, 208, 192]);
     expect(isPlayerStructuralNode('everness:mineral_stone_brick')).toBe(false);
     expect(isPlayerStructuralNode('everness:mineral_stone_brick_with_growth')).toBe(false);
     expect(isNaturalTerrainGroundNode('everness:mineral_stone_brick')).toBe(true);
     expect(classifyColumnExtrusionKind('everness:mineral_stone_brick')).toBe(0);
 
-    // 2. Shipwreck wool sails, fences, and chests must not extrude as 3D monolith walls
-    expect(classifyColumnExtrusionKind('wool:white')).toBe(0);
+    // 2. Non-volumetric attachments (fences, chests, torches) and flora/crystal pillars must not extrude as 3D buildings
     expect(classifyColumnExtrusionKind('default:fence_wood')).toBe(0);
     expect(classifyColumnExtrusionKind('default:chest_locked')).toBe(0);
+    expect(classifyColumnExtrusionKind('everness:bamboo_1')).toBe(0);
+    expect(classifyColumnExtrusionKind('everness:bamboo_leaves')).toBe(0);
+    expect(classifyColumnExtrusionKind('mcl_bamboo:bamboo')).toBe(0);
+    expect(classifyColumnExtrusionKind('everness:crystal_tree')).toBe(0);
+    expect(classifyColumnExtrusionKind('everness:crystal_pillar')).toBe(0);
+    expect(classifyColumnExtrusionKind('mcl_amethyst:amethyst_cluster')).toBe(0);
 
-    // 3. Bamboo stalks and Crystal Pillars must classify as extrusion kinds 2 and 3, while real masonry walls classify as 1
-    expect(classifyColumnExtrusionKind('everness:bamboo_1')).toBe(2);
-    expect(classifyColumnExtrusionKind('everness:bamboo_leaves')).toBe(2);
-    expect(classifyColumnExtrusionKind('mcl_bamboo:bamboo')).toBe(2);
-    expect(classifyColumnExtrusionKind('everness:crystal_tree')).toBe(3);
-    expect(classifyColumnExtrusionKind('everness:crystal_pillar')).toBe(3);
-    expect(classifyColumnExtrusionKind('mcl_amethyst:amethyst_cluster')).toBe(3);
+    // 3. Architectural materials (masonry, stone_block, wool domes, bakedclay, glass, wood) must classify as 3D buildings (1)
     expect(classifyColumnExtrusionKind('default:stonebrick')).toBe(1);
+    expect(classifyColumnExtrusionKind('default:stone_block')).toBe(1);
+    expect(classifyColumnExtrusionKind('default:sandstone_block')).toBe(1);
+    expect(classifyColumnExtrusionKind('wool:yellow')).toBe(1);
+    expect(classifyColumnExtrusionKind('bakedclay:green')).toBe(1);
+    expect(classifyColumnExtrusionKind('default:glass')).toBe(1);
+    expect(classifyColumnExtrusionKind('default:wood')).toBe(1);
+    expect(isNaturalTerrainGroundNode('default:stone_block')).toBe(false);
+    expect(isNaturalTerrainGroundNode('wool:yellow')).toBe(false);
+    expect(isNaturalTerrainGroundNode('bakedclay:green')).toBe(false);
 
-    // 4. Verify suspended overhang / ship sail with air gap below is cleared in CompactBlockSurface
+    // 4. Wilderness blocks with zero buildings must NOT allocate blk.extrusionKind (zero-overhead memory optimization)
     const blockSurfaces = new Map<string, any>();
     const macroMipmap = new Map<string, any>();
+    const wildernessBlk = mergeParsedBlockIntoCompactSurface(
+      {
+        posKey: '1,0,0',
+        blockX: 1,
+        blockY: 0,
+        blockZ: 0,
+        version: 29,
+        nodeMapping: {},
+        columns: [
+          {
+            localX: 2,
+            localZ: 2,
+            topLocalY: 5,
+            groundLocalY: 5,
+            bottomLocalY: 0,
+            nodeName: 'default:dirt_with_grass',
+            waterCount: 0
+          }
+        ]
+      },
+      -32000,
+      32000,
+      blockSurfaces,
+      macroMipmap,
+      {}
+    );
+    expect(wildernessBlk).not.toBeNull();
+    expect(wildernessBlk!.extrusionKind).toBeUndefined();
+
+    // 5. Hollow building roofs (hasAirGapBelow: true) and full-block structures without dirt underneath
+    // must preserve extrusionKind = 1 and anchor avgY to the foundation level instead of roof topY!
     const merged = mergeParsedBlockIntoCompactSurface(
       {
         posKey: '0,0,0',
@@ -1443,30 +1550,22 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
             localX: 3,
             localZ: 3,
             topLocalY: 14,
-            groundLocalY: 2,
-            contiguousSpan: 3,
-            hasAirGapBelow: true, // Suspended roof/sail with open air underneath
+            groundLocalY: undefined, // Floor replaced natural dirt
+            bottomLocalY: 5, // Building floor rests at Y = 5
+            contiguousSpan: 1,
+            hasAirGapBelow: true, // Hollow indoor room beneath roof
             nodeName: 'default:wood',
             waterCount: 0
           },
           {
             localX: 4,
             localZ: 3,
-            topLocalY: 12,
-            groundLocalY: 4,
-            contiguousSpan: 8,
-            hasAirGapBelow: false, // Contiguous bamboo stalk from ground to top
-            nodeName: 'everness:bamboo_2',
-            waterCount: 0
-          },
-          {
-            localX: 5,
-            localZ: 3,
             topLocalY: 15,
-            groundLocalY: 4,
-            contiguousSpan: 11,
-            hasAirGapBelow: false, // Contiguous crystal pillar from ground to top
-            nodeName: 'everness:crystal_tree',
+            groundLocalY: undefined,
+            bottomLocalY: 5,
+            contiguousSpan: 10,
+            hasAirGapBelow: false,
+            nodeName: 'wool:yellow',
             waterCount: 0
           }
         ]
@@ -1479,26 +1578,145 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     );
 
     expect(merged).not.toBeNull();
-    expect(merged!.extrusionKind![(3 << 4) | 3]).toBe(0); // Suspended overhang excluded
-    expect(merged!.extrusionKind![(3 << 4) | 4]).toBe(2); // Bamboo stalk included
-    expect(merged!.extrusionKind![(3 << 4) | 5]).toBe(3); // Crystal pillar included
+    expect(merged!.extrusionKind).toBeDefined();
+    expect(merged!.extrusionKind![(3 << 4) | 3]).toBe(1); // Hollow building roof preserved
+    expect(merged!.extrusionKind![(3 << 4) | 4]).toBe(1); // Wool dome preserved
+    expect(merged!.extrusionSpan![(3 << 4) | 3]).toBe(9);
+    expect(merged!.extrusionSpan![(3 << 4) | 4]).toBe(10);
+    expect(merged!.avgY).toBe(5); // Anchored to foundation (Y = 5), NOT roof (Y = 14..15)!
 
-    // 5. Verify MapStore cycles through all 4 extrusion filter modes
+    // 5b. 1-block hillside terraces/paths (contiguousSpan = 1) over deep underground stone (blockY = -1)
+    // and floating sky platforms (open air at bottom of blockY = 4) must NOT extrude into skyscrapers!
+    const hillBlockSurfaces = new Map<string, any>();
+    // First merge blockY = 4 (floating sky platform at Y = 69 with open air to ly = 0)
+    mergeParsedBlockIntoCompactSurface(
+      {
+        posKey: '2,4,2',
+        blockX: 2,
+        blockY: 4,
+        blockZ: 2,
+        version: 29,
+        nodeMapping: {},
+        columns: [
+          {
+            localX: 1,
+            localZ: 1,
+            topLocalY: 5,
+            floorLocalY: -1, // Open air to ly = 0
+            bottomLocalY: 5,
+            contiguousSpan: 1,
+            hasAirGapBelow: true,
+            nodeName: 'bakedclay:yellow',
+            waterCount: 0
+          }
+        ]
+      },
+      -32000,
+      32000,
+      hillBlockSurfaces,
+      macroMipmap,
+      {}
+    );
+    // Next merge blockY = 2 (1-block-thick colored hillside at Y = 45, plus bare log beam without foliage)
+    mergeParsedBlockIntoCompactSurface(
+      {
+        posKey: '2,2,2',
+        blockX: 2,
+        blockY: 2,
+        blockZ: 2,
+        version: 29,
+        nodeMapping: {},
+        columns: [
+          {
+            localX: 2,
+            localZ: 2,
+            topLocalY: 13, // World Y = 45
+            groundLocalY: undefined,
+            bottomLocalY: 13,
+            contiguousSpan: 1,
+            hasAirGapBelow: false,
+            nodeName: 'wool:yellow',
+            waterCount: 0
+          },
+          {
+            localX: 5,
+            localZ: 5,
+            topLocalY: 12,
+            groundLocalY: 10,
+            bottomLocalY: 0,
+            contiguousSpan: 2,
+            hasAirGapBelow: false,
+            nodeName: 'default:tree',
+            trunkNodeName: 'default:tree',
+            trunkLocalY: 12,
+            hasFoliage: false, // Bare structural log beam without foliage!
+            waterCount: 0
+          }
+        ]
+      },
+      -32000,
+      32000,
+      hillBlockSurfaces,
+      macroMipmap,
+      {}
+    );
+    // Finally merge blockY = -1 (deep underground stone at Y = -10)
+    mergeParsedBlockIntoCompactSurface(
+      {
+        posKey: '2,-1,2',
+        blockX: 2,
+        blockY: -1,
+        blockZ: 2,
+        version: 29,
+        nodeMapping: {},
+        columns: [
+          {
+            localX: 1,
+            localZ: 1,
+            topLocalY: 6, // World Y = -10
+            groundLocalY: 6,
+            bottomLocalY: 0,
+            contiguousSpan: 1,
+            hasAirGapBelow: false,
+            nodeName: 'default:stone',
+            waterCount: 0
+          },
+          {
+            localX: 2,
+            localZ: 2,
+            topLocalY: 6, // World Y = -10
+            groundLocalY: 6,
+            bottomLocalY: 0,
+            contiguousSpan: 1,
+            hasAirGapBelow: false,
+            nodeName: 'default:stone',
+            waterCount: 0
+          }
+        ]
+      },
+      -32000,
+      32000,
+      hillBlockSurfaces,
+      macroMipmap,
+      {}
+    );
+    const hillMerged = hillBlockSurfaces.get('2,2');
+    expect(hillMerged).toBeDefined();
+    // Neither the floating sky platform at (1,1) nor the 1-block wool hillside at (2,2) may extrude!
+    expect(hillMerged!.extrusionKind?.[(1 << 4) | 1] ?? 0).toBe(0);
+    expect(hillMerged!.extrusionKind?.[(2 << 4) | 2] ?? 0).toBe(0);
+    // Bare log beam without foliage at (5,5) must NOT spawn a tree billboard!
+    expect(hillMerged!.treeAnchors?.length ?? 0).toBe(0);
+    // Hill avgY must stay elevated (> 40), never collapsed to -10 by blockY = -1!
+    expect(hillMerged!.avgY).toBeGreaterThan(40);
+
+    // 6. Verify MapStore defaults buildingExtrusions3dEnabled to false and toggles cleanly
     safeClearStorage();
     const store = new MapStore();
-    expect(store.extrusionFilterMode()).toBe('off');
     expect(store.buildingExtrusions3dEnabled()).toBe(false);
-    store.cycleExtrusionFilterMode();
-    expect(store.extrusionFilterMode()).toBe('all');
+    store.toggleBuildingExtrusions3D();
     expect(store.buildingExtrusions3dEnabled()).toBe(true);
-    store.cycleExtrusionFilterMode();
-    expect(store.extrusionFilterMode()).toBe('pillars');
-    expect(store.buildingExtrusions3dEnabled()).toBe(true);
-    store.cycleExtrusionFilterMode();
-    expect(store.extrusionFilterMode()).toBe('structures');
-    expect(store.buildingExtrusions3dEnabled()).toBe(true);
-    store.cycleExtrusionFilterMode();
-    expect(store.extrusionFilterMode()).toBe('off');
+    store.toggleBuildingExtrusions3D();
     expect(store.buildingExtrusions3dEnabled()).toBe(false);
   });
 
@@ -1879,6 +2097,181 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     const res = await (worldLoader as any).decodeMacroSectorCoarse(0, 0, macroMipmap, {}, 1);
     expect(macroMipmap.has('m4:10,10')).toBe(true);
     expect(res.evictedMipKeys).not.toContain('m4:10,10');
+  });
+
+  it('preserves exact node names in CompactBlockSurface palette without color guessing and prevents cross-game biome contamination', () => {
+    const blockSurfaces = new Map<string, any>();
+    const macroMipmap = new Map<string, any>();
+    const nodeCounts: Record<string, number> = {};
+
+    // Simulate parsed block containing multiple real Asuna nodes
+    const sampleBlock = {
+      posKey: '100',
+      blockX: -22,
+      blockY: 0,
+      blockZ: 63,
+      version: 29,
+      nodeMapping: {
+        1: 'default:dirt_with_grass',
+        2: 'too_many_stones:andesite',
+        3: 'japaneseforest:japanese_tree',
+        4: 'japaneseforest:japanese_leaves_1'
+      },
+      columns: [
+        { localX: 0, localZ: 0, topLocalY: 8, nodeName: 'default:dirt_with_grass', waterCount: 0 },
+        { localX: 6, localZ: 4, topLocalY: 8, nodeName: 'too_many_stones:andesite', waterCount: 0 },
+        { localX: 10, localZ: 10, topLocalY: 9, nodeName: 'japaneseforest:japanese_tree', waterCount: 0 }
+      ]
+    };
+
+    const blk = mergeParsedBlockIntoCompactSurface(
+      sampleBlock,
+      -32768,
+      32767,
+      blockSurfaces,
+      macroMipmap,
+      nodeCounts
+    );
+
+    expect(blk).not.toBeNull();
+    expect(blk?.palette).toBeDefined();
+    expect(blk?.palette).toContain('too_many_stones:andesite');
+    expect(blk?.palette).toContain('japaneseforest:japanese_tree');
+    expect(blk?.nodeIndex).toBeDefined();
+
+    // Query exact coordinate (worldX = -22*16 + 6 = -346, worldZ = 63*16 + 4 = 1012)
+    const db: any = { blockSurfaces, macroMipmap };
+    const col = lookupWorldColumn(-346, 1012, db);
+    expect(col).toBeDefined();
+    // Authentic node preserved without reverse-guessing to mcl_end:end_rod_silver!
+    expect(col?.nodeName).toBe('too_many_stones:andesite');
+
+    // Biome resolution test: decorative rod or grey stone at Y: 8 on non-MineClone world
+    // must NEVER resolve to 'mcl_the_end'
+    const fallbackDeciduous = DEFAULT_LUANTI_BIOMES.find(b => b.id === 'deciduous_forest')!;
+    const biomeForStone = resolveBiomeForDbNode(
+      'too_many_stones:andesite',
+      8,
+      0,
+      DEFAULT_LUANTI_BIOMES,
+      fallbackDeciduous
+    );
+    expect(biomeForStone.id).not.toBe('mcl_the_end');
+
+    const biomeForRod = resolveBiomeForDbNode(
+      'mcl_end:end_rod_silver',
+      8,
+      0,
+      DEFAULT_LUANTI_BIOMES,
+      fallbackDeciduous
+    );
+    expect(biomeForRod.id).not.toBe('mcl_the_end');
+    expect(biomeForRod.id).toBe('deciduous_forest');
+
+    // Asuna node color and sapling tests
+    const sakuraColor = resolveNodeColor('japaneseforest:japanese_leaves_1');
+    expect(sakuraColor).toEqual([238, 175, 192]);
+
+    const andesiteColor = resolveNodeColor('too_many_stones:andesite');
+    expect(andesiteColor).toEqual([136, 136, 138]);
+
+    const treeSapling = resolveSaplingForNode('japaneseforest:japanese_tree');
+    expect(treeSapling).toBe('mcl_cherry_blossom:cherrysapling');
+  });
+
+  it('cancels active streaming, flushes pending worker tiles, and prevents loading deadlocks when switching maps mid-stream', async () => {
+    let injector: Injector;
+    injector = Injector.create({
+      providers: [
+        { provide: MapStore, useFactory: () => new MapStore() },
+        { provide: CoordProjectionService, useFactory: () => new CoordProjectionService() },
+        { provide: PwaStorageService, useFactory: () => new PwaStorageService() },
+        {
+          provide: WorkerPoolService,
+          useFactory: () => runInInjectionContext(injector, () => new WorkerPoolService())
+        }
+      ]
+    });
+
+    const store = injector.get(MapStore);
+    const workerPool = injector.get(WorkerPoolService);
+    const worldLoader = runInInjectionContext(injector, () => new WorldLoaderService());
+
+    // 1. Verify WorkerPoolService.cancelAllPendingTiles() purges queued jobs and rejects with AbortError
+    // Manually push a mock queued job into workerPool
+    const poolAny = workerPool as any;
+    let rejectedWithAbort = false;
+    poolAny.queue.push({
+      coordKey: 'color/6/1_1',
+      configKey: 'cfg',
+      job: { jobId: 999, tileKind: 'color' },
+      revision: 1,
+      cacheKey: 'cache_test',
+      resolvers: [() => {}],
+      rejecters: [
+        (err: any) => {
+          if (err?.name === 'AbortError') rejectedWithAbort = true;
+        }
+      ]
+    });
+    expect(poolAny.queue.length).toBe(1);
+    workerPool.cancelAllPendingTiles();
+    expect(poolAny.queue.length).toBe(0);
+    expect(rejectedWithAbort).toBe(true);
+
+    // 2. Simulate Map 1 being stuck in mid-stream (e.g. 31% detail sectors streaming)
+    worldLoader.isStreamingRegion.set(true);
+    worldLoader.streamProgress.set({
+      phase: 'viewport-stream',
+      stepIndex: 1,
+      totalSteps: 1,
+      label: 'Streaming 1:1 Detail Sectors:',
+      percent: 31,
+      current: 10,
+      total: 32,
+      unit: 'sectors',
+      blocksDecoded: 10496,
+      elapsedSeconds: 14,
+      etaSeconds: 31
+    });
+
+    expect(worldLoader.isStreamingRegion()).toBe(true);
+    expect(worldLoader.streamProgress()?.percent).toBe(31);
+
+    // 3. User selects Map 2 while Map 1 was streaming - simulate handleFileListInput()
+    const emptyFileList: File[] = [];
+    // handleFileListInput with empty returns, so test cancelActiveStreaming & closeActiveDb directly
+    worldLoader.cancelActiveStreaming();
+    expect(worldLoader.isStreamingRegion()).toBe(false);
+    expect(worldLoader.streamProgress()).toBeNull();
+
+    // Verify handleFileListInput immediately resets state
+    worldLoader.isStreamingRegion.set(true);
+    worldLoader.streamProgress.set({
+      phase: 'viewport-stream',
+      stepIndex: 1,
+      totalSteps: 1,
+      label: 'Streaming 1:1 Detail Sectors:',
+      percent: 31,
+      current: 10,
+      total: 32,
+      unit: 'sectors',
+      blocksDecoded: 10496,
+      elapsedSeconds: 14,
+      etaSeconds: 31
+    });
+
+    const fakeFile = new File([new Uint8Array(100)], 'new_world_map.sqlite');
+    // Start loading Map 2
+    const loadPromise = worldLoader.handleFileListInput([fakeFile]);
+    // Immediately after starting new world load, isStreamingRegion and streamProgress MUST be reset
+    expect(worldLoader.isStreamingRegion()).toBe(false);
+    expect(worldLoader.streamProgress()).toBeNull();
+
+    // Await completion (will catch invalid SQLite error and clean up)
+    await loadPromise;
+    expect(worldLoader.isStreamingRegion()).toBe(false);
+    expect(worldLoader.streamProgress()).toBeNull();
   });
 });
 
