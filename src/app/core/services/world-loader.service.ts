@@ -1249,7 +1249,7 @@ export class WorldLoaderService {
     radiusMacroZ: number;
   } {
     const effectivePitch = this.mapStore.terrain3dEnabled()
-      ? Math.max(pitch, this.mapStore.terrainPitch())
+      ? Math.max(pitch, this.mapStore.cameraState().pitch)
       : pitch;
     const pitchFactor =
       effectivePitch > 15 ? 1 + Math.min(1.35, (effectivePitch / 60) * 1.1) : 1;

@@ -1842,6 +1842,44 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
       (globalThis as any).document = origDoc;
     }
   });
+
+  it('expands viewport macro radii in 3D pitched mode and preserves untouched coarse mipmap cells during sector refinement', async () => {
+    const injector = Injector.create({
+      providers: [
+        { provide: MapStore, useFactory: () => new MapStore() },
+        { provide: CoordProjectionService, useFactory: () => new CoordProjectionService() },
+        { provide: PwaStorageService, useFactory: () => new PwaStorageService() },
+        {
+          provide: WorkerPoolService,
+          useFactory: () => runInInjectionContext(injector, () => new WorkerPoolService())
+        }
+      ]
+    });
+    const worldLoader = runInInjectionContext(injector, () => new WorldLoaderService());
+    const store = runInInjectionContext(injector, () => injector.get(MapStore));
+
+    store.terrain3dEnabled.set(false);
+    const flatRadii = worldLoader.computeViewportRadii(5.6, 1920, 1080, 0);
+
+    store.terrain3dEnabled.set(true);
+    store.cameraState.update(c => ({ ...c, pitch: 53 }));
+    const pitchedRadii = worldLoader.computeViewportRadii(5.6, 1920, 1080, 53);
+
+    expect(pitchedRadii.halfSpanX).toBeGreaterThan(flatRadii.halfSpanX);
+    expect(pitchedRadii.radiusMacroX).toBeGreaterThanOrEqual(flatRadii.radiusMacroX);
+
+    // Verify decodeMacroSectorCoarse does not wipe out existing coarse mipmaps in untouched cells
+    const macroMipmap = new Map<string, any>([
+      ['m4:10,10', { bx: 10, bz: 10, y: 12, r: 80, g: 160, b: 80, waterDepth: 0, nodeName: 'default:dirt_with_grass', count: 1 }]
+    ]);
+    (worldLoader as any).activeDbReader = {
+      queryBlocksInBounds: vi.fn().mockResolvedValue([])
+    };
+
+    const res = await (worldLoader as any).decodeMacroSectorCoarse(0, 0, macroMipmap, {}, 1);
+    expect(macroMipmap.has('m4:10,10')).toBe(true);
+    expect(res.evictedMipKeys).not.toContain('m4:10,10');
+  });
 });
 
 

@@ -143,5 +143,30 @@ describe('PostgresSqlDumpReader & Hex Bytea Decoder', () => {
 
       reader.close();
     });
+
+    it('groups candidate columns by coarse stride cell so non-multiple coordinates are not dropped', async () => {
+      const p1 = packBlockPos(1, 0, 1); // inside 4x4 cell (0, 0) but not a multiple of 4
+      const p2 = packBlockPos(6, 0, 7); // inside 4x4 cell (1, 1) but not a multiple of 4
+      const sqlContent = [
+        'CREATE TABLE public.blocks (pos bigint NOT NULL, data bytea);',
+        'COPY public.blocks (pos, data) FROM stdin;',
+        `${p1}\t\\\\x1c01ffff0202aabb`,
+        `${p2}\t\\\\x1c01ffff0202ccdd`,
+        '\\.',
+        ''
+      ].join('\n');
+
+      const file = new File([sqlContent], 'map.sql');
+      const reader = new PostgresSqlDumpReader(file);
+      await reader.init();
+      await reader.scanOverviewAndVerticalLayers();
+
+      const results = await reader.queryBlocksInBounds(0, 15, 0, 15, -1, 1, 512, 4);
+      expect(results.length).toBe(2);
+      expect(results.some(r => r.x === 1 && r.z === 1)).toBe(true);
+      expect(results.some(r => r.x === 6 && r.z === 7)).toBe(true);
+
+      reader.close();
+    });
   });
 });
