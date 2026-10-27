@@ -398,20 +398,57 @@ export class PostgresSqlDumpReader implements WorldDatabaseReader {
     maxResults = 4096,
     stride = 1
   ): Promise<RawMapBlockRow[]> {
-    const candidates = this.index.filter(e => {
-      return (
+    const columnGroups = new Map<
+      string,
+      { targetX: number; targetZ: number; entries: PostgresBlockIndexEntry[] }
+    >();
+
+    for (let i = 0; i < this.index.length; i++) {
+      const e = this.index[i];
+      if (
         e.x >= minBx &&
         e.x <= maxBx &&
         e.z >= minBz &&
         e.z <= maxBz &&
         e.y >= minBy &&
-        e.y <= maxBy &&
-        (stride === 1 || (e.x % stride === 0 && e.z % stride === 0))
-      );
-    });
+        e.y <= maxBy
+      ) {
+        const groupKey =
+          stride > 1
+            ? `${Math.floor(e.x / stride)},${Math.floor(e.z / stride)}`
+            : `${e.x},${e.z}`;
+        let grp = columnGroups.get(groupKey);
+        if (!grp) {
+          grp = { targetX: e.x, targetZ: e.z, entries: [e] };
+          columnGroups.set(groupKey, grp);
+        } else if (e.x === grp.targetX && e.z === grp.targetZ) {
+          if (!grp.entries.some(b => b.y === e.y)) {
+            grp.entries.push(e);
+          }
+        }
+      }
+    }
 
-    const toFetch = candidates.slice(0, maxResults);
-    if (toFetch.length === 0) return [];
+    const cols = Array.from(columnGroups.values());
+    if (cols.length === 0) return [];
+
+    let selectedCols = cols;
+    if (cols.length > maxResults) {
+      selectedCols = [];
+      const step = Math.ceil(cols.length / maxResults);
+      for (let i = 0; i < cols.length && selectedCols.length < maxResults; i += step) {
+        selectedCols.push(cols[i]);
+      }
+    }
+
+    const toFetch: PostgresBlockIndexEntry[] = [];
+    for (let i = 0; i < selectedCols.length; i++) {
+      const grp = selectedCols[i];
+      grp.entries.sort((a, b) => a.y - b.y);
+      for (let k = 0; k < grp.entries.length; k++) {
+        toFetch.push(grp.entries[k]);
+      }
+    }
 
     const results: RawMapBlockRow[] = [];
 
@@ -419,11 +456,12 @@ export class PostgresSqlDumpReader implements WorldDatabaseReader {
     for (let i = 0; i < toFetch.length; i++) {
       const entry = toFetch[i];
       const row = await this.fetchSingleBlock(entry, i);
-      if (row) {
+      if (row && row.data.length > 0) {
         results.push(row);
       }
     }
 
+    results.sort((a, b) => a.y - b.y);
     return results;
   }
 

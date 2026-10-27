@@ -1,4 +1,4 @@
-<div class="flex flex-col h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 font-sans relative">
+<div class="fixed inset-0 flex flex-col overflow-hidden bg-slate-950 text-slate-100 font-sans">
   <!-- Top App Navigation & Actions -->
   <app-header
     (openHelp)="showHelpModal.set(true)"
@@ -33,7 +33,7 @@
     </div>
 
     <!-- Center Panel: MapLibre GL JS 2D/3D Topographic Map Viewport -->
-    <main id="main-map-viewport" class="flex-1 h-full min-w-0 min-h-0 relative">
+    <main id="main-map-viewport" class="flex-1 min-w-0 min-h-0 relative">
       <app-map-viewport />
     </main>
 
@@ -168,7 +168,8 @@
       role="dialog"
       aria-modal="true"
       [attr.aria-label]="mobileSheetTitle()"
-      class="lg:hidden fixed inset-x-0 bottom-14 max-h-[82vh] h-[78vh] bg-slate-900 border-t border-slate-700/80 rounded-t-2xl shadow-2xl z-40 flex flex-col animate-sheet-up overflow-hidden pb-safe">
+      style="bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));"
+      class="lg:hidden fixed inset-x-0 max-h-[82vh] h-[78vh] bg-slate-900 border-t border-slate-700/80 rounded-t-2xl shadow-2xl z-40 flex flex-col animate-sheet-up overflow-hidden">
       <!-- Sheet Handle & Header Bar -->
       <div class="pt-2 px-4 pb-2 bg-slate-950/95 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
         <div class="flex items-center gap-2">
@@ -187,7 +188,9 @@
       </div>
 
       <!-- Sheet Content Body (Scrollable) -->
-      <div class="flex-1 overflow-y-auto min-h-0 bg-slate-900">
+      <div
+        style="padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));"
+        class="flex-1 overflow-y-auto min-h-0 bg-slate-900">
         @if (mobileSheetTab() === 'world') {
           <app-world-panel />
         }
@@ -212,72 +215,75 @@
   <!-- ========================================== -->
   <nav
     aria-label="Mobile workspace navigation"
-    class="flex lg:hidden h-14 bg-slate-950 border-t border-slate-800 px-1 items-center justify-around text-[10px] select-none z-30 pb-safe flex-shrink-0">
-    <!-- 1. Map View (Full Canvas) -->
-    <button
-      (click)="openMobileTab('none')"
-      [class.text-sky-400]="mobileSheetTab() === 'none'"
-      [class.text-slate-400]="mobileSheetTab() !== 'none'"
-      [attr.aria-label]="'app.mapView' | translate"
-      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
-      <svg lucideMap class="w-5 h-5"></svg>
-      <span>{{ 'app.mapView' | translate }}</span>
-    </button>
+    style="height: calc(3.5rem + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: max(0.25rem, env(safe-area-inset-left, 0px)); padding-right: max(0.25rem, env(safe-area-inset-right, 0px));"
+    class="flex lg:hidden flex-col justify-start bg-slate-950 border-t border-slate-800 select-none z-30 flex-shrink-0">
+    <div class="flex items-center justify-around w-full h-14 text-[10px]">
+      <!-- 1. Map View (Full Canvas) -->
+      <button
+        (click)="openMobileTab('none')"
+        [class.text-sky-400]="mobileSheetTab() === 'none'"
+        [class.text-slate-400]="mobileSheetTab() !== 'none'"
+        [attr.aria-label]="'app.mapView' | translate"
+        class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+        <svg lucideMap class="w-5 h-5"></svg>
+        <span>{{ 'app.mapView' | translate }}</span>
+      </button>
 
-    <!-- 2. World & Seed -->
-    <button
-      (click)="openMobileTab('world')"
-      [class.text-sky-400]="mobileSheetTab() === 'world'"
-      [class.text-slate-400]="mobileSheetTab() !== 'world'"
-      [attr.aria-label]="'app.worldAndSeed' | translate"
-      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
-      <svg lucideCompass class="w-5 h-5"></svg>
-      <span>{{ 'app.worldAndSeed' | translate }}</span>
-    </button>
+      <!-- 2. World & Seed -->
+      <button
+        (click)="openMobileTab('world')"
+        [class.text-sky-400]="mobileSheetTab() === 'world'"
+        [class.text-slate-400]="mobileSheetTab() !== 'world'"
+        [attr.aria-label]="'app.worldAndSeed' | translate"
+        class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+        <svg lucideCompass class="w-5 h-5"></svg>
+        <span>{{ 'app.worldAndSeed' | translate }}</span>
+      </button>
 
-    <!-- 3. Voronoi Matrix -->
-    <button
-      (click)="openMobileTab('voronoi')"
-      [class.text-sky-400]="mobileSheetTab() === 'voronoi'"
-      [class.text-slate-400]="mobileSheetTab() !== 'voronoi'"
-      aria-label="Interactive Voronoi Matrix"
-      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
-      <svg lucideCrosshair class="w-5 h-5"></svg>
-      <span>{{ 'voronoi.title' | translate }}</span>
-    </button>
+      <!-- 3. Voronoi Matrix -->
+      <button
+        (click)="openMobileTab('voronoi')"
+        [class.text-sky-400]="mobileSheetTab() === 'voronoi'"
+        [class.text-slate-400]="mobileSheetTab() !== 'voronoi'"
+        aria-label="Interactive Voronoi Matrix"
+        class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+        <svg lucideCrosshair class="w-5 h-5"></svg>
+        <span>{{ 'voronoi.title' | translate }}</span>
+      </button>
 
-    <!-- 4. Inspector & DB -->
-    <button
-      (click)="openMobileTab('inspector')"
-      [class.text-sky-400]="mobileSheetTab() === 'inspector'"
-      [class.text-slate-400]="mobileSheetTab() !== 'inspector'"
-      aria-label="Coordinates and World Database Inspector"
-      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
-      <svg lucideDatabase class="w-5 h-5"></svg>
-      <span>{{ 'inspector.title' | translate }}</span>
-    </button>
+      <!-- 4. Inspector & DB -->
+      <button
+        (click)="openMobileTab('inspector')"
+        [class.text-sky-400]="mobileSheetTab() === 'inspector'"
+        [class.text-slate-400]="mobileSheetTab() !== 'inspector'"
+        aria-label="Coordinates and World Database Inspector"
+        class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+        <svg lucideDatabase class="w-5 h-5"></svg>
+        <span>{{ 'inspector.title' | translate }}</span>
+      </button>
 
-    <!-- 5. Custom Map Markers -->
-    <button
-      (click)="openMobileTab('markers')"
-      [class.text-rose-400]="mobileSheetTab() === 'markers'"
-      [class.text-slate-400]="mobileSheetTab() !== 'markers'"
-      aria-label="Custom Map Markers"
-      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
-      <svg lucideMapPin class="w-5 h-5"></svg>
-      <span>{{ 'markers.title' | translate }}</span>
-    </button>
+      <!-- 5. Custom Map Markers -->
+      <button
+        (click)="openMobileTab('markers')"
+        [class.text-rose-400]="mobileSheetTab() === 'markers'"
+        [class.text-slate-400]="mobileSheetTab() !== 'markers'"
+        aria-label="Custom Map Markers"
+        class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+        <svg lucideMapPin class="w-5 h-5"></svg>
+        <span>{{ 'markers.title' | translate }}</span>
+      </button>
 
-    <!-- 6. Route Planner -->
-    <button
-      (click)="openMobileTab('routes')"
-      [class.text-emerald-400]="mobileSheetTab() === 'routes'"
-      [class.text-slate-400]="mobileSheetTab() !== 'routes'"
-      aria-label="Route Planner"
-      class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
-      <svg lucideRoute class="w-5 h-5"></svg>
-      <span>{{ 'routes.title' | translate }}</span>
-    </button>
+      <!-- 6. Route Planner -->
+      <button
+        (click)="openMobileTab('routes')"
+        [class.text-emerald-400]="mobileSheetTab() === 'routes'"
+        [class.text-slate-400]="mobileSheetTab() !== 'routes'"
+        aria-label="Route Planner"
+        class="flex-1 h-full flex flex-col items-center justify-center gap-0.5 font-medium transition active:scale-95">
+        <svg lucideRoute class="w-5 h-5"></svg>
+        <span>{{ 'routes.title' | translate }}</span>
+      </button>
+    </div>
   </nav>
 
   <!-- Keyboard Shortcuts Cheat Sheet Dialog -->

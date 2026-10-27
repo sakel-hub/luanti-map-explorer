@@ -644,7 +644,7 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
     }
 
     const rawMatches: Array<{ x: number; y: number; z: number; rowid: number }> = [];
-    const maxRawIndexKeys = maxResults * 16;
+    const maxRawIndexKeys = Math.max(262144, maxResults * 64);
     let pagesVisited = 0;
     let lastYieldMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
@@ -749,7 +749,7 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
     maxBz: number,
     stride = 1
   ): bigint | null {
-    const zStep = stride > 1 && maxBz - minBz >= 16 ? stride : 1;
+    const zStep = stride > 1 && maxBz - minBz >= 256 ? stride : 1;
     const alignZ = (z: number): number => {
       if (zStep <= 1) return z;
       const rem = ((z % zStep) + zStep) % zStep;
@@ -806,7 +806,7 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
     const boxMinPos = packBlockPos(minBx, minBy, minBz);
     const boxMaxPos = packBlockPos(maxBx, maxBy, maxBz);
     const rawMatches: Array<{ x: number; y: number; z: number; rowid: number }> = [];
-    const maxRawIndexKeys = Math.max(65536, maxResults * 16);
+    const maxRawIndexKeys = Math.max(262144, maxResults * 64);
     let pagesVisited = 0;
     let lastYieldMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
@@ -1106,7 +1106,23 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
     maxResults: number,
     stride = 1
   ): Promise<RawSqliteMapBlockRow[]> {
-    const rows: RawSqliteMapBlockRow[] = [];
+    interface LeafCandidateCell {
+      x: number;
+      y: number;
+      z: number;
+      rowid: number;
+      pageNum: number;
+      payloadStart: number;
+      payloadLen: number;
+    }
+
+    const columnGroups = new Map<
+      string,
+      { targetX: number; targetZ: number; cells: LeafCandidateCell[] }
+    >();
+    const maxRawCells = Math.max(262144, maxResults * 64);
+    let totalRawCells = 0;
+
     const boxMinPos = packBlockPos(minBx, minBy, minBz);
     const boxMaxPos = packBlockPos(maxBx, maxBy, maxBz);
     const canPruneByRowidPos = !this.hasXyzSchema && this.blocksIndexRootPage === 0;
@@ -1120,7 +1136,7 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
     ): Promise<void> => {
       if (
         depth > 10 ||
-        rows.length >= maxResults ||
+        totalRawCells >= maxRawCells ||
         pageNum < 1 ||
         pageNum > this.totalPages
       ) {
@@ -1156,7 +1172,7 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
             if (divPos >= nextTarget) {
               const leftChild = this.readUint32(page, cellOff);
               await visitTable(leftChild, depth + 1, prevPos);
-              if (rows.length >= maxResults) return;
+              if (totalRawCells >= maxRawCells) return;
               if (divPos > boxMaxPos) {
                 return;
               }
@@ -1173,7 +1189,7 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
             const cellOff = (page[ptrBase + i * 2] << 8) | page[ptrBase + i * 2 + 1];
             const leftChild = this.readUint32(page, cellOff);
             await visitTable(leftChild, depth + 1, lowerBoundPos);
-            if (rows.length >= maxResults) return;
+            if (totalRawCells >= maxRawCells) return;
           }
           await visitTable(rightChild, depth + 1, lowerBoundPos);
         }
@@ -1182,6 +1198,8 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
         for (let i = 0; i < cellCount; i++) {
           const cellOff = (page[ptrBase + i * 2] << 8) | page[ptrBase + i * 2 + 1];
           const payloadVar = this.readVarint(page, cellOff);
+          if (payloadVar.value <= 52) continue;
+
           const rowidVar = this.readVarint(page, cellOff + payloadVar.bytes);
           const posInt = this.extractClassicPosFromLeafCell(page, cellOff, payloadVar, rowidVar);
           if (canPruneByRowidPos) {
@@ -1196,21 +1214,50 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
             coords.z >= minBz &&
             coords.z <= maxBz &&
             coords.y >= minBy &&
-            coords.y <= maxBy &&
-            (stride <= 1 || ((coords.x & (stride - 1)) === 0 && (coords.z & (stride - 1)) === 0))
+            coords.y <= maxBy
           ) {
             const payloadStart = cellOff + payloadVar.bytes + rowidVar.bytes;
-            const fullRecord = await this.readTableCellPayload(page, payloadStart, payloadVar.value);
-            const blob = this.extractLastBlobFromRecord(fullRecord);
-            if (blob && blob.length > 51) {
-              rows.push({
-                x: coords.x,
-                y: coords.y,
-                z: coords.z,
-                rowid: Number(this.readVarintBigInt(page, cellOff + payloadVar.bytes)),
-                data: blob
-              });
-              if (rows.length >= maxResults) return;
+            const blobLen = this.getRecordLastBlobLength(page, payloadStart);
+            if (blobLen <= 51) continue;
+
+            const groupKey =
+              stride > 1
+                ? `${Math.floor(coords.x / stride)},${Math.floor(coords.z / stride)}`
+                : `${coords.x},${coords.z}`;
+            let grp = columnGroups.get(groupKey);
+            const rowid = Number(this.readVarintBigInt(page, cellOff + payloadVar.bytes));
+
+            if (!grp) {
+              grp = {
+                targetX: coords.x,
+                targetZ: coords.z,
+                cells: [
+                  {
+                    x: coords.x,
+                    y: coords.y,
+                    z: coords.z,
+                    rowid,
+                    pageNum,
+                    payloadStart,
+                    payloadLen: payloadVar.value
+                  }
+                ]
+              };
+              columnGroups.set(groupKey, grp);
+              totalRawCells++;
+            } else if (coords.x === grp.targetX && coords.z === grp.targetZ) {
+              if (!grp.cells.some(c => c.y === coords.y)) {
+                grp.cells.push({
+                  x: coords.x,
+                  y: coords.y,
+                  z: coords.z,
+                  rowid,
+                  pageNum,
+                  payloadStart,
+                  payloadLen: payloadVar.value
+                });
+                totalRawCells++;
+              }
             }
           }
         }
@@ -1218,8 +1265,74 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
     };
 
     await visitTable(this.blocksTableRootPage, 0, -9223372036854775808n);
+
+    const cols = Array.from(columnGroups.values());
+    if (cols.length === 0) return [];
+
+    let selectedCols = cols;
+    if (cols.length > maxResults) {
+      selectedCols = [];
+      const step = Math.ceil(cols.length / maxResults);
+      for (let i = 0; i < cols.length && selectedCols.length < maxResults; i += step) {
+        selectedCols.push(cols[i]);
+      }
+    }
+
+    const maxCellsPerCol = cols.length <= 256 ? 16 : stride > 1 ? 2 : 3;
+    const cellsToRead: LeafCandidateCell[] = [];
+
+    for (let i = 0; i < selectedCols.length; i++) {
+      const grp = selectedCols[i];
+      grp.cells.sort((a, b) => a.y - b.y);
+      const startIdx = Math.max(0, grp.cells.length - maxCellsPerCol);
+      for (let k = startIdx; k < grp.cells.length; k++) {
+        cellsToRead.push(grp.cells[k]);
+      }
+    }
+
+    cellsToRead.sort((a, b) => a.pageNum - b.pageNum || a.payloadStart - b.payloadStart);
+
+    const rows: RawSqliteMapBlockRow[] = [];
+    for (let i = 0; i < cellsToRead.length; i++) {
+      const cell = cellsToRead[i];
+      const page = await this.readPage(cell.pageNum);
+      const fullRecord = await this.readTableCellPayload(page, cell.payloadStart, cell.payloadLen);
+      const blob = this.extractLastBlobFromRecord(fullRecord);
+      if (blob && blob.length > 51) {
+        rows.push({
+          x: cell.x,
+          y: cell.y,
+          z: cell.z,
+          rowid: cell.rowid,
+          data: blob
+        });
+      }
+      if ((i & 15) === 15) {
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        if (now - lastYieldMs >= 8) {
+          lastYieldMs = now;
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
+    }
+
     rows.sort((a, b) => a.y - b.y);
     return rows;
+  }
+
+  private getRecordLastBlobLength(page: Uint8Array, payloadStart: number): number {
+    if (payloadStart >= page.length) return 0;
+    const hdrVar = this.readVarint(page, payloadStart);
+    let pos = payloadStart + hdrVar.bytes;
+    const hdrEnd = payloadStart + hdrVar.value;
+    if (hdrEnd > page.length) return 0;
+    let lastSt = 0;
+    while (pos < hdrEnd) {
+      const st = this.readVarint(page, pos);
+      lastSt = st.value;
+      pos += st.bytes;
+    }
+    return this.serialTypeByteLen(lastSt);
   }
 
   private async fetchBlockBlobByRowid(rootPage: number, targetRowid: number): Promise<Uint8Array | null> {
@@ -1264,7 +1377,9 @@ export class SqliteFileBtreeReader implements WorldDatabaseReader {
           const rowidBig = this.readVarintBigInt(page, cellOff + payloadVar.bytes);
 
           if (rowidBig === targetBig) {
+            if (payloadVar.value <= 52) return null;
             const payloadStart = cellOff + payloadVar.bytes + rowidVar.bytes;
+            if (this.getRecordLastBlobLength(page, payloadStart) <= 51) return null;
             const fullRecord = await this.readTableCellPayload(page, payloadStart, payloadVar.value);
             return this.extractLastBlobFromRecord(fullRecord);
           } else if (rowidBig < targetBig) {

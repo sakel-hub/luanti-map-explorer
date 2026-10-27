@@ -1238,7 +1238,8 @@ export class WorldLoaderService {
   public computeViewportRadii(
     zoom: number,
     viewportWidthPx = typeof window !== 'undefined' ? Math.max(window.innerWidth, 1600) : 1920,
-    viewportHeightPx = typeof window !== 'undefined' ? Math.max(window.innerHeight, 900) : 1080
+    viewportHeightPx = typeof window !== 'undefined' ? Math.max(window.innerHeight, 900) : 1080,
+    pitch = 0
   ): {
     halfSpanX: number;
     halfSpanZ: number;
@@ -1247,16 +1248,21 @@ export class WorldLoaderService {
     radiusMacroX: number;
     radiusMacroZ: number;
   } {
+    const effectivePitch = this.mapStore.terrain3dEnabled()
+      ? Math.max(pitch, this.mapStore.terrainPitch())
+      : pitch;
+    const pitchFactor =
+      effectivePitch > 15 ? 1 + Math.min(1.35, (effectivePitch / 60) * 1.1) : 1;
     const nodesPerPx = 128 / Math.pow(2, zoom);
-    const halfSpanX = viewportWidthPx * 0.58 * nodesPerPx;
-    const halfSpanZ = viewportHeightPx * 0.58 * nodesPerPx;
+    const halfSpanX = viewportWidthPx * 0.58 * nodesPerPx * pitchFactor;
+    const halfSpanZ = viewportHeightPx * 0.58 * nodesPerPx * pitchFactor;
     return {
       halfSpanX,
       halfSpanZ,
       radiusSubSectorsX: Math.max(3, Math.ceil(halfSpanX / 256)),
       radiusSubSectorsZ: Math.max(3, Math.ceil(halfSpanZ / 256)),
-      radiusMacroX: Math.max(2, Math.ceil(halfSpanX / 1024)),
-      radiusMacroZ: Math.max(2, Math.ceil(halfSpanZ / 1024))
+      radiusMacroX: Math.max(3, Math.ceil(halfSpanX / 1024)),
+      radiusMacroZ: Math.max(3, Math.ceil(halfSpanZ / 1024))
     };
   }
 
@@ -1562,15 +1568,37 @@ export class WorldLoaderService {
           if (missingMacro.length > 64) {
             missingMacro.length = 64;
           }
+          if (missingMacro.length === 0) {
+            targetStride = 4;
+            missingMacro = collectMissingForStride(4).filter(
+              m =>
+                Math.abs(m.mx - centerMx) <= Math.max(12, radiusMacroX * 2) &&
+                Math.abs(m.mz - centerMz) <= Math.max(10, radiusMacroZ * 2)
+            );
+            if (missingMacro.length > 64) {
+              missingMacro.length = 64;
+            }
+          }
         } else {
           // Sector 1x1 mode (3.8 <= zoom < 6.0): stream explored macro sectors visible in the viewport at stride = 1 (16x16 node block mipmaps)
           missingMacro = collectMissingForStride(1).filter(
             m =>
-              Math.abs(m.mx - centerMx) <= Math.max(4, radiusMacroX) &&
-              Math.abs(m.mz - centerMz) <= Math.max(3, radiusMacroZ)
+              Math.abs(m.mx - centerMx) <= Math.max(5, radiusMacroX) &&
+              Math.abs(m.mz - centerMz) <= Math.max(4, radiusMacroZ)
           );
-          if (missingMacro.length > 48) {
-            missingMacro.length = 48;
+          if (missingMacro.length > 64) {
+            missingMacro.length = 64;
+          }
+          if (missingMacro.length === 0) {
+            targetStride = 4;
+            missingMacro = collectMissingForStride(4).filter(
+              m =>
+                Math.abs(m.mx - centerMx) <= Math.max(12, radiusMacroX * 2) &&
+                Math.abs(m.mz - centerMz) <= Math.max(10, radiusMacroZ * 2)
+            );
+            if (missingMacro.length > 64) {
+              missingMacro.length = 64;
+            }
           }
         }
 
@@ -1634,7 +1662,11 @@ export class WorldLoaderService {
             const now = performance.now();
             const elapsedSinceBump = now - lastRevisionBumpMs;
             const workersIdle = this.workerPool.activeTasksCount() === 0;
-            if (elapsedSinceBump >= 900 && workersIdle) {
+            if (
+              offset + batchSize < missingMacro.length &&
+              elapsedSinceBump >= 2200 &&
+              workersIdle
+            ) {
               this.mapStore.bumpRevision();
               lastRevisionBumpMs = now;
               unbumpedData = false;
@@ -1745,7 +1777,10 @@ export class WorldLoaderService {
             const now = performance.now();
             const elapsedSinceBump = now - lastRevisionBumpMs;
             const workersIdle = this.workerPool.activeTasksCount() === 0;
-            if (!hasBumpedFirstBatch || (elapsedSinceBump >= 900 && workersIdle)) {
+            if (
+              !hasBumpedFirstBatch ||
+              (offset + 4 < missing.length && elapsedSinceBump >= 2000 && workersIdle)
+            ) {
               const modBiomes = this.computeDiscoveredModBiomesList();
               if (modBiomes.length > this.mapStore.discoveredModBiomes().length) {
                 this.mapStore.setDiscoveredModBiomes(modBiomes);
@@ -1781,6 +1816,25 @@ export class WorldLoaderService {
           const nextReq = this.pendingViewportRequest;
           this.pendingViewportRequest = null;
           this.streamViewportBlocks(nextReq.centerX, nextReq.centerZ, nextReq.zoom);
+        } else if (zoom < 6.0 && dbState.exploredMacroSectors) {
+          const centerMx = Math.floor(centerX / 1024);
+          const centerMz = Math.floor(centerZ / 1024);
+          const { radiusMacroX, radiusMacroZ } = this.computeViewportRadii(zoom);
+          const hasUnloadedHorizon = dbState.exploredMacroSectors.some(s => {
+            const prevStride = this.loadedMacroSectorStride.get(`${s.mx},${s.mz}`) ?? 99;
+            return (
+              prevStride > 4 &&
+              Math.abs(s.mx - centerMx) <= Math.max(12, radiusMacroX * 2) &&
+              Math.abs(s.mz - centerMz) <= Math.max(10, radiusMacroZ * 2)
+            );
+          });
+          if (hasUnloadedHorizon) {
+            setTimeout(() => {
+              if (!this.isStreamingRegion() && !this.mapStore.isLoadingWorld()) {
+                this.streamViewportBlocks(centerX, centerZ, zoom);
+              }
+            }, 30);
+          }
         }
       }
     }
@@ -1999,36 +2053,6 @@ export class WorldLoaderService {
     const minBz = mz * 64;
     const maxBz = (mz + 1) * 64 - 1;
 
-    // Purge stale coarser mipmap keys in sub-sectors that are NOT already decoded in high-res (`loadedSubSectors`)
-    for (let sz = mz * 4; sz < (mz + 1) * 4; sz++) {
-      for (let sx = mx * 4; sx < (mx + 1) * 4; sx++) {
-        if (this.loadedSubSectors.has(`${sx},${sz}`)) continue;
-
-        if (stride === 1 || stride === 2) {
-          for (let m4z = sz * 4; m4z < (sz + 1) * 4; m4z++) {
-            for (let m4x = sx * 4; m4x < (sx + 1) * 4; m4x++) {
-              const k = `m4:${m4x},${m4z}`;
-              if (macroMipmap.delete(k)) evictedMipKeysSet.add(k);
-            }
-          }
-          for (let bz = sz * 16; bz < (sz + 1) * 16; bz++) {
-            for (let bx = sx * 16; bx < (sx + 1) * 16; bx++) {
-              const k = `b:${bx},${bz}`;
-              if (macroMipmap.delete(k)) evictedMipKeysSet.add(k);
-            }
-          }
-        }
-        if (stride === 1) {
-          for (let mcz = sz * 8; mcz < (sz + 1) * 8; mcz++) {
-            for (let mcx = sx * 8; mcx < (sx + 1) * 8; mcx++) {
-              const k = `${mcx},${mcz}`;
-              if (macroMipmap.delete(k)) evictedMipKeysSet.add(k);
-            }
-          }
-        }
-      }
-    }
-
     const slice = this.mapStore.verticalSlice();
     const { minBy, maxBy } = this.getEffectiveBlockYRange();
     const effectiveMaxBy = stride === 4 && slice.presetId === 'surface' ? Math.min(maxBy, 4) : maxBy;
@@ -2090,20 +2114,26 @@ export class WorldLoaderService {
       );
       if (res) {
         if (stride === 1) {
-          macroMipmap.delete(`${col.x >> 1},${col.z >> 1}`);
-          macroMipmap.delete(`m4:${col.x >> 2},${col.z >> 2}`);
+          const mip2Key = `${col.x >> 1},${col.z >> 1}`;
+          if (macroMipmap.delete(mip2Key)) evictedMipKeysSet.add(mip2Key);
+          const mip4Key = `m4:${col.x >> 2},${col.z >> 2}`;
+          if (macroMipmap.delete(mip4Key)) evictedMipKeysSet.add(mip4Key);
           const exactKey = `b:${col.x},${col.z}`;
           touchedMipKeys.add(exactKey);
           evictedMipKeysSet.delete(exactKey);
         } else if (stride === 2) {
-          macroMipmap.delete(`b:${col.x},${col.z}`);
-          macroMipmap.delete(`m4:${col.x >> 2},${col.z >> 2}`);
+          const exactKey = `b:${col.x},${col.z}`;
+          if (macroMipmap.delete(exactKey)) evictedMipKeysSet.add(exactKey);
+          const mip4Key = `m4:${col.x >> 2},${col.z >> 2}`;
+          if (macroMipmap.delete(mip4Key)) evictedMipKeysSet.add(mip4Key);
           const mip2Key = `${col.x >> 1},${col.z >> 1}`;
           touchedMipKeys.add(mip2Key);
           evictedMipKeysSet.delete(mip2Key);
         } else {
-          macroMipmap.delete(`b:${col.x},${col.z}`);
-          macroMipmap.delete(`${col.x >> 1},${col.z >> 1}`);
+          const exactKey = `b:${col.x},${col.z}`;
+          if (macroMipmap.delete(exactKey)) evictedMipKeysSet.add(exactKey);
+          const mip2Key = `${col.x >> 1},${col.z >> 1}`;
+          if (macroMipmap.delete(mip2Key)) evictedMipKeysSet.add(mip2Key);
           const mip4Key = `m4:${col.x >> 2},${col.z >> 2}`;
           touchedMipKeys.add(mip4Key);
           evictedMipKeysSet.delete(mip4Key);
