@@ -118,7 +118,6 @@ export function isTreeTrunkNode(name: string): boolean {
   if (!name || name === 'air' || name === 'ignore') return false;
   const lower = name.toLowerCase();
   if (
-    lower.includes('wood') ||
     lower.includes('plank') ||
     lower.includes('stair') ||
     lower.includes('slab') ||
@@ -132,10 +131,22 @@ export function isTreeTrunkNode(name: string): boolean {
   ) {
     return false;
   }
-  return (
+  if (
     lower.includes('trunk') ||
     lower.includes('log') ||
     lower.includes('stem') ||
+    lower.includes('bark') ||
+    lower.includes('stripped_') ||
+    lower.includes('redwood') ||
+    lower.includes('ironwood') ||
+    lower.includes('cherry_wood')
+  ) {
+    return true;
+  }
+  if (lower.includes('wood')) {
+    return false;
+  }
+  return (
     (lower.includes('tree') && !lower.includes('plank')) ||
     lower.includes('cactus') ||
     lower.includes('bamboo') ||
@@ -151,6 +162,11 @@ export function isTreeFoliageNode(name: string): boolean {
   return (
     lower.includes('leaves') ||
     lower.includes('needles') ||
+    lower.includes('foliage') ||
+    lower.includes('blossom') ||
+    lower.includes('twigs') ||
+    lower.includes('branch') ||
+    lower.includes('vine') ||
     lower.includes('coral_leaves') ||
     lower.includes('crystal_leaves') ||
     lower.includes('coral_bones') ||
@@ -206,8 +222,46 @@ const EXACT_COLOR_TO_NODE_NAME: Record<number, string> = (() => {
 })();
 
 export function isPlayerStructuralNode(name: string): boolean {
+  if (!name || name === 'air' || name === 'ignore') return false;
   const lower = name.toLowerCase();
-  // Natural Everness travertine/mineral pool stones & natural biome cobbles are terrain, not buildings
+
+  // 1. Natural vegetation, flora, tree trunks, and canopies are NEVER player architectural structures
+  if (
+    isTreeTrunkNode(name) ||
+    isTreeFoliageNode(name) ||
+    isFoliageOrSpikeNode(name) ||
+    resolveSaplingForNode(name) !== null ||
+    isDecorationOrCropKey(name)
+  ) {
+    return false;
+  }
+
+  // 2. Specific flora keywords that might have escaped previous checks
+  if (
+    lower.includes('leaves') ||
+    lower.includes('needles') ||
+    lower.includes('foliage') ||
+    lower.includes('blossom') ||
+    lower.includes('sapling') ||
+    lower.includes('flower') ||
+    lower.includes('bush') ||
+    lower.includes('fern') ||
+    lower.includes('sprout') ||
+    lower.includes('vine') ||
+    lower.includes('twigs') ||
+    lower.includes('branch') ||
+    lower.includes('cactus') ||
+    lower.includes('bamboo') ||
+    lower.includes('mushroom') ||
+    lower.includes('grass_') ||
+    lower.includes('seaweed') ||
+    lower.includes('kelp') ||
+    lower.includes('coral')
+  ) {
+    return false;
+  }
+
+  // 3. Natural terrain, geological pillars, stalagmites, ores, minerals
   if (
     lower.includes('mineral_stone') ||
     lower.includes('mineral_sand') ||
@@ -217,11 +271,16 @@ export function isPlayerStructuralNode(name: string): boolean {
     lower.includes('crystal_block') ||
     lower.includes('crystal_pillar') ||
     lower.includes('crystal_megalith') ||
+    lower.includes('crystal_spire') ||
     lower.includes('amethyst_block') ||
     lower.includes('moss_block') ||
     lower.includes('snowblock') ||
     lower.includes('icecobble') ||
     lower.includes('mossycobble') ||
+    lower.includes('dripstone') ||
+    lower.includes('stalagmite') ||
+    lower.includes('stalactite') ||
+    lower.includes('ice_spike') ||
     lower.includes('_ore') ||
     lower.includes('ore_') ||
     lower.includes(':ore') ||
@@ -234,6 +293,16 @@ export function isPlayerStructuralNode(name: string): boolean {
   ) {
     return false;
   }
+
+  // 4. Natural basalt/stone/sandstone geological pillars (must not be treated as architectural pillars)
+  if (
+    (lower.includes('pillar') || lower.includes('column')) &&
+    (lower.includes('basalt') || lower.includes('stone') || lower.includes('sandstone') || lower.includes('crystal') || lower.includes('ice') || lower.includes('blackstone') || lower.includes('deepslate')) &&
+    !lower.includes('quartz') && !lower.includes('purpur') && !lower.includes('brick') && !lower.includes('chiseled')
+  ) {
+    return false;
+  }
+
   return (
     lower.includes('stonebrick') ||
     lower.includes('sandstonebrick') ||
@@ -242,7 +311,7 @@ export function isPlayerStructuralNode(name: string): boolean {
     lower.includes('sandstone_block') ||
     lower.includes('obsidian_block') ||
     lower.includes('obsidian_glass') ||
-    lower.includes('wood') ||
+    (lower.includes('wood') && !lower.includes('redwood') && !lower.includes('ironwood') && !lower.includes('cherry_wood') && !lower.includes('trunk') && !lower.includes('log')) ||
     lower.includes('plank') ||
     lower.includes('glass') ||
     lower.includes('pane') ||
@@ -303,7 +372,11 @@ export function isExtrudableStructureWallNode(name: string): boolean {
     lower.includes('protector') ||
     lower.includes('chest') ||
     lower.includes('furnace') ||
-    lower.includes('carpet')
+    lower.includes('carpet') ||
+    lower.includes('sign') ||
+    lower.includes('banner') ||
+    lower.includes('flower_pot') ||
+    lower.includes('candle')
   ) {
     return false;
   }
@@ -540,7 +613,7 @@ export function mergeParsedBlockIntoCompactSurface(
     const hasEnclosedRoom =
       !!col.hasAirGapBelow &&
       resolvedFloorLocalY !== undefined &&
-      airGapInBlock <= 8 &&
+      airGapInBlock <= 24 &&
       !col.trunkNodeName &&
       !col.hasFoliage;
     const colStructuralSpan = !col.hasAirGapBelow
@@ -686,7 +759,7 @@ export function mergeParsedBlockIntoCompactSurface(
           const upperSpan = blk.extrusionSpan[idx];
           if (upperSpan === 0) {
             const totalRoomSpan = blk.topY[idx] - worldY;
-            if (totalRoomSpan >= 2 && totalRoomSpan <= 8 && !col.trunkNodeName && !col.hasFoliage) {
+            if (totalRoomSpan >= 2 && totalRoomSpan <= 24 && !col.trunkNodeName && !col.hasFoliage) {
               blk.extrusionSpan[idx] = totalRoomSpan;
               if (blk.groundY && worldY > blk.groundY[idx]) {
                 blk.groundY[idx] = worldY;
@@ -861,7 +934,8 @@ export function mergeParsedBlockIntoCompactSurface(
       if (blk.extrusionKind && blk.extrusionKind[idx] === 1 && (!blk.extrusionSpan || blk.extrusionSpan[idx] >= 2)) {
         return false;
       }
-      if (blk.topY[idx] > a.y + 14) {
+      // Tolerate tall tree canopies (up to 36 nodes tall) while culling underground cave trees
+      if (blk.topY[idx] > a.y + 36) {
         return false;
       }
       return true;

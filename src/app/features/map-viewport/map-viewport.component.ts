@@ -2014,6 +2014,149 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
         const extKindArr = blk.extrusionKind!;
         const extSpanArr = blk.extrusionSpan;
 
+        const isBuildingCol = new Uint8Array(256);
+        const colSpanArr = new Uint8Array(256);
+        const colRelNodesArr = new Uint8Array(256);
+
+        // Pass 1: Identify initial building columns
+        for (let idx = 0; idx < 256; idx++) {
+          const topY = blk.topY[idx];
+          if (topY <= -32768 || blk.waterDepth[idx] > 0) continue;
+          const colSpan = extSpanArr ? extSpanArr[idx] : 18;
+          if (extKindArr[idx] === 1 && colSpan >= 2) {
+            isBuildingCol[idx] = 1;
+            colSpanArr[idx] = colSpan;
+          }
+        }
+
+        // Pass 2: Complete interior roof / courtyard holes surrounded by >= 3 building columns
+        for (let lz = 0; lz < 16; lz++) {
+          for (let lx = 0; lx < 16; lx++) {
+            const idx = (lz << 4) | lx;
+            if (isBuildingCol[idx] === 1) continue;
+            const topY = blk.topY[idx];
+            if (topY <= -32768 || blk.waterDepth[idx] > 0) continue;
+
+            let neighborCount = 0;
+            let neighborSpanSum = 0;
+            if (lx > 0 && isBuildingCol[idx - 1] === 1) {
+              neighborCount++;
+              neighborSpanSum += colSpanArr[idx - 1];
+            }
+            if (lx < 15 && isBuildingCol[idx + 1] === 1) {
+              neighborCount++;
+              neighborSpanSum += colSpanArr[idx + 1];
+            }
+            if (lz > 0 && isBuildingCol[idx - 16] === 1) {
+              neighborCount++;
+              neighborSpanSum += colSpanArr[idx - 16];
+            }
+            if (lz < 15 && isBuildingCol[idx + 16] === 1) {
+              neighborCount++;
+              neighborSpanSum += colSpanArr[idx + 16];
+            }
+
+            if (neighborCount >= 3) {
+              isBuildingCol[idx] = 1;
+              colSpanArr[idx] = Math.round(neighborSpanSum / neighborCount);
+            }
+          }
+        }
+
+        // Pass 3: Connected component analysis (8-way) with minimum footprint filter (>= 3 columns)
+        const visited = new Uint8Array(256);
+        const compQueue = new Int16Array(256);
+        const compIndices = new Int16Array(256);
+
+        const westHasBuilding = (z: number) =>
+          db.blockSurfaces?.get(`${bx - 1},${bz}`)?.extrusionKind?.[(z << 4) | 15] === 1;
+        const eastHasBuilding = (z: number) =>
+          db.blockSurfaces?.get(`${bx + 1},${bz}`)?.extrusionKind?.[(z << 4) | 0] === 1;
+        const northHasBuilding = (x: number) =>
+          db.blockSurfaces?.get(`${bx},${bz - 1}`)?.extrusionKind?.[(15 << 4) | x] === 1;
+        const southHasBuilding = (x: number) =>
+          db.blockSurfaces?.get(`${bx},${bz + 1}`)?.extrusionKind?.[(0 << 4) | x] === 1;
+
+        for (let i = 0; i < 256; i++) {
+          if (isBuildingCol[i] === 0 || visited[i] === 1) continue;
+
+          let qHead = 0;
+          let qTail = 0;
+          compQueue[qTail++] = i;
+          visited[i] = 1;
+          let compSize = 0;
+          let connectsToNeighborBlock = false;
+
+          while (qHead < qTail) {
+            const currIdx = compQueue[qHead++];
+            compIndices[compSize++] = currIdx;
+            const clx = currIdx & 15;
+            const clz = currIdx >> 4;
+
+            if (
+              (clx === 0 && westHasBuilding(clz)) ||
+              (clx === 15 && eastHasBuilding(clz)) ||
+              (clz === 0 && northHasBuilding(clx)) ||
+              (clz === 15 && southHasBuilding(clx))
+            ) {
+              connectsToNeighborBlock = true;
+            }
+
+            // 8-way neighbors for diagonal walls and octagonal roofs/towers
+            for (let dz = -1; dz <= 1; dz++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dz === 0) continue;
+                const nlx = clx + dx;
+                const nlz = clz + dz;
+                if (nlx >= 0 && nlx < 16 && nlz >= 0 && nlz < 16) {
+                  const nIdx = (nlz << 4) | nlx;
+                  if (isBuildingCol[nIdx] === 1 && visited[nIdx] === 0) {
+                    visited[nIdx] = 1;
+                    compQueue[qTail++] = nIdx;
+                  }
+                }
+              }
+            }
+          }
+
+          // If component has fewer than 3 connected columns and does not bridge into adjacent block, prune it
+          if (compSize < 3 && !connectsToNeighborBlock) {
+            for (let k = 0; k < compSize; k++) {
+              isBuildingCol[compIndices[k]] = 0;
+            }
+            continue;
+          }
+
+          // Unify roof plane elevations: find minimum ground base for columns sharing each roof level
+          const topYToBaseY = new Map<number, number>();
+          for (let k = 0; k < compSize; k++) {
+            const cIdx = compIndices[k];
+            const topY = blk.topY[cIdx];
+            const colSpan = colSpanArr[cIdx];
+            const rawGroundY =
+              groundYArr && groundYArr[cIdx] > -32768 && topY - groundYArr[cIdx] <= 18
+                ? groundYArr[cIdx]
+                : extSpanArr
+                  ? topY - colSpan
+                  : blk.avgY;
+            const baseRefY =
+              rawGroundY < waterLevel && topY > waterLevel ? waterLevel : rawGroundY;
+            const existing = topYToBaseY.get(topY);
+            if (existing === undefined || baseRefY < existing) {
+              topYToBaseY.set(topY, baseRefY);
+            }
+          }
+
+          for (let k = 0; k < compSize; k++) {
+            const cIdx = compIndices[k];
+            const topY = blk.topY[cIdx];
+            const colSpan = colSpanArr[cIdx];
+            const sectionBaseY = topYToBaseY.get(topY)!;
+            const rawDiff = topY - sectionBaseY;
+            colRelNodesArr[cIdx] = Math.max(2, Math.min(18, Math.max(rawDiff, colSpan)));
+          }
+        }
+
         openRects.length = 0;
 
         for (let lz = 0; lz < 16; lz++) {
@@ -2049,8 +2192,7 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
 
           for (let lx = 0; lx < 16; lx++) {
             const idx = (lz << 4) | lx;
-            const topY = blk.topY[idx];
-            if (topY <= -32768 || blk.waterDepth[idx] > 0) {
+            if (isBuildingCol[idx] === 0) {
               if (runStartX !== -1) {
                 commitRowRun(runStartX, lx - 1, runRelNodes, runColor);
                 runStartX = -1;
@@ -2058,55 +2200,7 @@ export class MapViewportComponent implements AfterViewInit, OnDestroy {
               continue;
             }
 
-            let colSpan = extSpanArr ? extSpanArr[idx] : 18;
-            let isBuildingCol = extKindArr[idx] === 1 && colSpan >= 2;
-            if (!isBuildingCol) {
-              // Complete interior roof / courtyard holes surrounded on >= 3 cardinal sides by 3D building columns
-              let neighborCount = 0;
-              let neighborSpanSum = 0;
-              if (lx > 0 && extKindArr[idx - 1] === 1 && (!extSpanArr || extSpanArr[idx - 1] >= 2)) {
-                neighborCount++;
-                neighborSpanSum += extSpanArr ? extSpanArr[idx - 1] : 6;
-              }
-              if (lx < 15 && extKindArr[idx + 1] === 1 && (!extSpanArr || extSpanArr[idx + 1] >= 2)) {
-                neighborCount++;
-                neighborSpanSum += extSpanArr ? extSpanArr[idx + 1] : 6;
-              }
-              if (lz > 0 && extKindArr[idx - 16] === 1 && (!extSpanArr || extSpanArr[idx - 16] >= 2)) {
-                neighborCount++;
-                neighborSpanSum += extSpanArr ? extSpanArr[idx - 16] : 6;
-              }
-              if (lz < 15 && extKindArr[idx + 16] === 1 && (!extSpanArr || extSpanArr[idx + 16] >= 2)) {
-                neighborCount++;
-                neighborSpanSum += extSpanArr ? extSpanArr[idx + 16] : 6;
-              }
-              if (neighborCount >= 3) {
-                isBuildingCol = true;
-                colSpan = Math.round(neighborSpanSum / neighborCount);
-              }
-            }
-
-            if (!isBuildingCol) {
-              if (runStartX !== -1) {
-                commitRowRun(runStartX, lx - 1, runRelNodes, runColor);
-                runStartX = -1;
-              }
-              continue;
-            }
-
-            const rawGroundY =
-              groundYArr && groundYArr[idx] > -32768 && topY - groundYArr[idx] <= 18
-                ? groundYArr[idx]
-                : extSpanArr
-                  ? topY - colSpan
-                  : blk.avgY;
-            // Never subtract underwater seabed depth (< waterLevel) for structures above water
-            const baseRefY =
-              rawGroundY < waterLevel && topY > waterLevel ? waterLevel : rawGroundY;
-            const rawDiff = topY - baseRefY;
-            const relNodes = Math.min(18, rawDiff, colSpan);
-
-            // Skip 1-block flat decks, floors, paths, or pool rims
+            const relNodes = colRelNodesArr[idx];
             if (relNodes < 2) {
               if (runStartX !== -1) {
                 commitRowRun(runStartX, lx - 1, runRelNodes, runColor);

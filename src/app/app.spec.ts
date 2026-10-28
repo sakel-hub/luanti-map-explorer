@@ -1481,7 +1481,7 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     expect(isNaturalTerrainGroundNode('everness:mineral_stone_brick')).toBe(true);
     expect(classifyColumnExtrusionKind('everness:mineral_stone_brick')).toBe(0);
 
-    // 2. Non-volumetric attachments (fences, chests, torches) and flora/crystal pillars must not extrude as 3D buildings
+    // 2. Non-volumetric attachments (fences, chests, torches), flora/tree trunks (redwood, cherry wood), and natural geological pillars must not extrude as 3D buildings
     expect(classifyColumnExtrusionKind('default:fence_wood')).toBe(0);
     expect(classifyColumnExtrusionKind('default:chest_locked')).toBe(0);
     expect(classifyColumnExtrusionKind('everness:bamboo_1')).toBe(0);
@@ -1491,7 +1491,25 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     expect(classifyColumnExtrusionKind('everness:crystal_pillar')).toBe(0);
     expect(classifyColumnExtrusionKind('mcl_amethyst:amethyst_cluster')).toBe(0);
 
-    // 3. Architectural materials (masonry, stone_block, wool domes, bakedclay, glass, wood) must classify as 3D buildings (1)
+    // Tree trunks & foliage containing 'wood' or 'blossom' must never extrude as building skyscrapers
+    expect(classifyColumnExtrusionKind('ethereal:redwood')).toBe(0);
+    expect(classifyColumnExtrusionKind('ethereal:redwood_trunk')).toBe(0);
+    expect(classifyColumnExtrusionKind('ethereal:giant_redwood_trunk')).toBe(0);
+    expect(classifyColumnExtrusionKind('ethereal:redwood_leaves')).toBe(0);
+    expect(classifyColumnExtrusionKind('mcl_cherry_blossom:cherry_wood')).toBe(0);
+    expect(classifyColumnExtrusionKind('mcl_trees:cherry_wood')).toBe(0);
+    expect(classifyColumnExtrusionKind('mcl_cherry_blossom:leaves')).toBe(0);
+    expect(classifyColumnExtrusionKind('mcl_cherry_blossom:cherrysapling')).toBe(0);
+    expect(isPlayerStructuralNode('ethereal:redwood_trunk')).toBe(false);
+    expect(isPlayerStructuralNode('ethereal:redwood_leaves')).toBe(false);
+    expect(isPlayerStructuralNode('mcl_cherry_blossom:cherry_wood')).toBe(false);
+
+    // Natural stone, sandstone, and basalt pillars must not extrude as player buildings
+    expect(classifyColumnExtrusionKind('mcl_blackstone:basalt_pillar')).toBe(0);
+    expect(classifyColumnExtrusionKind('default:sandstone_pillar')).toBe(0);
+    expect(classifyColumnExtrusionKind('default:basalt_column')).toBe(0);
+
+    // 3. Architectural materials (masonry, stone_block, wool domes, bakedclay, glass, wood, architectural quartz pillars) must classify as 3D buildings (1)
     expect(classifyColumnExtrusionKind('default:stonebrick')).toBe(1);
     expect(classifyColumnExtrusionKind('default:stone_block')).toBe(1);
     expect(classifyColumnExtrusionKind('default:sandstone_block')).toBe(1);
@@ -1499,6 +1517,9 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     expect(classifyColumnExtrusionKind('bakedclay:green')).toBe(1);
     expect(classifyColumnExtrusionKind('default:glass')).toBe(1);
     expect(classifyColumnExtrusionKind('default:wood')).toBe(1);
+    expect(classifyColumnExtrusionKind('quartz:quartz_pillar')).toBe(1);
+    expect(classifyColumnExtrusionKind('default:stair_wood')).toBe(1);
+    expect(classifyColumnExtrusionKind('default:slab_cobble')).toBe(1);
     expect(isNaturalTerrainGroundNode('default:stone_block')).toBe(false);
     expect(isNaturalTerrainGroundNode('wool:yellow')).toBe(false);
     expect(isNaturalTerrainGroundNode('bakedclay:green')).toBe(false);
@@ -1567,6 +1588,17 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
             hasAirGapBelow: false,
             nodeName: 'wool:yellow',
             waterCount: 0
+          },
+          {
+            localX: 5,
+            localZ: 3,
+            topLocalY: 15,
+            groundLocalY: undefined,
+            bottomLocalY: 5, // Tall hall floor at Y = 5 (air gap 9 > 8)
+            contiguousSpan: 1,
+            hasAirGapBelow: true,
+            nodeName: 'default:stonebrick',
+            waterCount: 0
           }
         ]
       },
@@ -1581,8 +1613,10 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     expect(merged!.extrusionKind).toBeDefined();
     expect(merged!.extrusionKind![(3 << 4) | 3]).toBe(1); // Hollow building roof preserved
     expect(merged!.extrusionKind![(3 << 4) | 4]).toBe(1); // Wool dome preserved
+    expect(merged!.extrusionKind![(3 << 4) | 5]).toBe(1); // Tall hall roof (air gap 9 > 8) preserved
     expect(merged!.extrusionSpan![(3 << 4) | 3]).toBe(9);
     expect(merged!.extrusionSpan![(3 << 4) | 4]).toBe(10);
+    expect(merged!.extrusionSpan![(3 << 4) | 5]).toBe(10);
     expect(merged!.avgY).toBe(5); // Anchored to foundation (Y = 5), NOT roof (Y = 14..15)!
 
     // 5b. 1-block hillside terraces/paths (contiguousSpan = 1) over deep underground stone (blockY = -1)

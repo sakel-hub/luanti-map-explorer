@@ -251,4 +251,173 @@ describe('TreeSpriteService', () => {
     expect(source.data.features.some((f: any) => f.properties.saplingKey === 'flowers:rose')).toBe(true);
     expect(source.data.features.some((f: any) => f.properties.saplingKey === 'farming:wheat')).toBe(true);
   });
+
+  it('renders large forests symmetrically across both sides of the camera without one-sided clipping', async () => {
+    mapStore.terrain3dEnabled.set(true);
+    const demoDb = buildDemoWorldDatabase(424242, 'surface');
+    const blockSurfaces = demoDb.blockSurfaces!;
+    blockSurfaces.clear();
+
+    // Populate a forest spanning negative X (-5..-1) and positive X (1..5) around camera center (0, 0)
+    for (let bx = -5; bx <= 5; bx++) {
+      for (let bz = -5; bz <= 5; bz++) {
+        const topY = new Int16Array(256).fill(10);
+        blockSurfaces.set(`${bx},${bz}`, {
+          bx,
+          bz,
+          avgY: 10,
+          rgb: new Uint8Array(256 * 3),
+          topY,
+          waterDepth: new Uint8Array(256),
+          treeAnchors: [
+            { lx: 4, lz: 4, y: 10, saplingKey: 'default:tree', scale: 1.0 },
+            { lx: 12, lz: 12, y: 10, saplingKey: 'default:pine_tree', scale: 1.2 }
+          ]
+        });
+      }
+    }
+
+    mapStore.worldDatabase.set(demoDb);
+    mapStore.setViewMode('db');
+
+    await service.initialize(mockMap);
+    service.updateTreeSprites();
+
+    const source = mockMap.getSource(TREE_SPRITES_SOURCE_ID);
+    expect(source.data.features.length).toBeGreaterThan(0);
+
+    // Verify trees exist on both the negative X side (west) and positive X side (east)
+    const westTrees = source.data.features.filter((f: any) => {
+      const [lng] = f.geometry.coordinates;
+      return lng < 0;
+    });
+    const eastTrees = source.data.features.filter((f: any) => {
+      const [lng] = f.geometry.coordinates;
+      return lng > 0;
+    });
+
+    // 5 negative blocks (-5..-1) * 11 bz rows * 2 trees = 110 west trees
+    // 6 non-negative blocks (0..5) * 11 bz rows * 2 trees = 132 east trees
+    expect(westTrees.length).toBe(110);
+    expect(eastTrees.length).toBe(132);
+  });
+
+  it('supports high tree capacity exceeding the previous 3500 limit for dense forests (up to 14000)', async () => {
+    mapStore.terrain3dEnabled.set(true);
+    const demoDb = buildDemoWorldDatabase(424242, 'surface');
+    const blockSurfaces = demoDb.blockSurfaces!;
+    blockSurfaces.clear();
+
+    // Populate a dense forest with 20x20 = 400 blocks, each having 12 trees = 4800 trees!
+    for (let bx = -10; bx < 10; bx++) {
+      for (let bz = -10; bz < 10; bz++) {
+        const anchors: any[] = [];
+        for (let t = 0; t < 12; t++) {
+          anchors.push({
+            lx: (t * 5) % 16,
+            lz: Math.floor((t * 5) / 16) * 4 + 2,
+            y: 10,
+            saplingKey: 'default:tree',
+            scale: 1.0
+          });
+        }
+        blockSurfaces.set(`${bx},${bz}`, {
+          bx,
+          bz,
+          avgY: 10,
+          rgb: new Uint8Array(256 * 3),
+          topY: new Int16Array(256).fill(10),
+          waterDepth: new Uint8Array(256),
+          treeAnchors: anchors
+        });
+      }
+    }
+
+    mapStore.worldDatabase.set(demoDb);
+    mapStore.setViewMode('db');
+
+    await service.initialize(mockMap);
+    service.updateTreeSprites();
+
+    const source = mockMap.getSource(TREE_SPRITES_SOURCE_ID);
+    // Must render well beyond the old 3,500 limit!
+    expect(source.data.features.length).toBeGreaterThan(3500);
+    expect(source.data.features.length).toBeLessThanOrEqual(14000);
+  });
+
+  it('preserves tall surface trees (> 14 nodes tall) like pine trees and sequoias without culling', async () => {
+    mapStore.terrain3dEnabled.set(true);
+    const demoDb = buildDemoWorldDatabase(424242, 'surface');
+    const blockSurfaces = demoDb.blockSurfaces!;
+    blockSurfaces.clear();
+
+    // Create a tall tree whose canopy top is 22 blocks above the base anchor
+    const topY = new Int16Array(256).fill(10);
+    topY[(8 << 4) | 8] = 32; // Canopy top is at Y = 32, trunk base is at Y = 10 (height = 22)
+
+    blockSurfaces.set('0,0', {
+      bx: 0,
+      bz: 0,
+      avgY: 12,
+      rgb: new Uint8Array(256 * 3),
+      topY,
+      waterDepth: new Uint8Array(256),
+      treeAnchors: [
+        { lx: 8, lz: 8, y: 10, saplingKey: 'default:pine_tree', scale: 1.4 }
+      ]
+    });
+
+    mapStore.worldDatabase.set(demoDb);
+    mapStore.setViewMode('db');
+
+    await service.initialize(mockMap);
+    service.updateTreeSprites();
+
+    const source = mockMap.getSource(TREE_SPRITES_SOURCE_ID);
+    expect(source.data.features.length).toBe(1);
+    expect(source.data.features[0].properties.saplingKey).toBe('default:pine_tree');
+  });
+
+  it('sorts candidate blocks radially so camera center is populated first', async () => {
+    mapStore.terrain3dEnabled.set(true);
+    const demoDb = buildDemoWorldDatabase(424242, 'surface');
+    const blockSurfaces = demoDb.blockSurfaces!;
+    blockSurfaces.clear();
+
+    // Block at origin (close) and block at (3,3) (further away, but within mock viewport)
+    blockSurfaces.set('0,0', {
+      bx: 0,
+      bz: 0,
+      avgY: 10,
+      rgb: new Uint8Array(256 * 3),
+      topY: new Int16Array(256).fill(10),
+      waterDepth: new Uint8Array(256),
+      treeAnchors: [{ lx: 8, lz: 8, y: 10, saplingKey: 'default:tree', scale: 1.0 }]
+    });
+
+    blockSurfaces.set('3,3', {
+      bx: 3,
+      bz: 3,
+      avgY: 10,
+      rgb: new Uint8Array(256 * 3),
+      topY: new Int16Array(256).fill(10),
+      waterDepth: new Uint8Array(256),
+      treeAnchors: [{ lx: 8, lz: 8, y: 10, saplingKey: 'default:pine_tree', scale: 1.0 }]
+    });
+
+    mapStore.worldDatabase.set(demoDb);
+    mapStore.setViewMode('db');
+
+    mockMap.getCenter = () => ({ lng: 0, lat: 0 });
+
+    await service.initialize(mockMap);
+    service.updateTreeSprites();
+
+    const source = mockMap.getSource(TREE_SPRITES_SOURCE_ID);
+    expect(source.data.features.length).toBe(2);
+    // The closest block (0,0 with default:tree) must be processed first before (3,3 with default:pine_tree)
+    expect(source.data.features[0].properties.saplingKey).toBe('default:tree');
+    expect(source.data.features[1].properties.saplingKey).toBe('default:pine_tree');
+  });
 });
+

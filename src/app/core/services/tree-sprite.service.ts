@@ -130,68 +130,48 @@ export class TreeSpriteService {
       return;
     }
 
-    const canvas = this.map.getCanvas?.();
-    const w = canvas?.width || 800;
-    const h = canvas?.height || 600;
+    // Use map.getBounds() which is natively clipped against the 3D horizon in MapLibre GL
+    // so rays above the horizon never invert behind the camera.
+    const bounds = this.map.getBounds();
+    const sw = this.projection.lngLatToLuanti(bounds.getWest(), bounds.getSouth());
+    const ne = this.projection.lngLatToLuanti(bounds.getEast(), bounds.getNorth());
 
-    const samplePoints: Array<[number, number]> = [
-      [0, 0],
-      [w, 0],
-      [w, h],
-      [0, h],
-      [w / 2, 0],
-      [w / 2, h / 2],
-      [w / 2, h]
-    ];
+    let rawMinX = Math.floor(Math.min(sw.x, ne.x));
+    let rawMaxX = Math.ceil(Math.max(sw.x, ne.x));
+    let rawMinZ = Math.floor(Math.min(sw.z, ne.z));
+    let rawMaxZ = Math.ceil(Math.max(sw.z, ne.z));
 
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minZ = Infinity;
-    let maxZ = -Infinity;
+    const center = this.map.getCenter ? this.map.getCenter() : { lng: 0, lat: 0 };
+    const luantiCenter = this.projection.lngLatToLuanti(center.lng, center.lat);
+    const centerBx = Math.floor(luantiCenter.x / 16);
+    const centerBz = Math.floor(luantiCenter.z / 16);
 
-    for (const [px, py] of samplePoints) {
-      try {
-        const lngLat = this.map.unproject([px, py]);
-        const pt = this.projection.lngLatToLuanti(lngLat.lng, lngLat.lat);
-        if (Number.isFinite(pt.x) && Number.isFinite(pt.z)) {
-          minX = Math.min(minX, pt.x);
-          maxX = Math.max(maxX, pt.x);
-          minZ = Math.min(minZ, pt.z);
-          maxZ = Math.max(maxZ, pt.z);
-        }
-      } catch {
-        // Fallback for extreme horizon projections
-      }
-    }
-
-    if (!Number.isFinite(minX) || !Number.isFinite(maxX)) {
-      const bounds = this.map.getBounds();
-      const sw = this.projection.lngLatToLuanti(bounds.getWest(), bounds.getSouth());
-      const ne = this.projection.lngLatToLuanti(bounds.getEast(), bounds.getNorth());
-      minX = Math.floor(Math.min(sw.x, ne.x));
-      maxX = Math.ceil(Math.max(sw.x, ne.x));
-      minZ = Math.floor(Math.min(sw.z, ne.z));
-      maxZ = Math.ceil(Math.max(sw.z, ne.z));
+    // Fallback if bounds are non-finite
+    if (!Number.isFinite(rawMinX) || !Number.isFinite(rawMaxX) || !Number.isFinite(rawMinZ) || !Number.isFinite(rawMaxZ)) {
+      rawMinX = luantiCenter.x - 1000;
+      rawMaxX = luantiCenter.x + 1000;
+      rawMinZ = luantiCenter.z - 1000;
+      rawMaxZ = luantiCenter.z + 1000;
     }
 
     // Safety margin to guarantee smooth panning and prevent pop-in at viewport borders
     const MARGIN = 48; // 3 MapBlocks
-    minX -= MARGIN;
-    maxX += MARGIN;
-    minZ -= MARGIN;
-    maxZ += MARGIN;
+    const minX = rawMinX - MARGIN;
+    const maxX = rawMaxX + MARGIN;
+    const minZ = rawMinZ - MARGIN;
+    const maxZ = rawMaxZ + MARGIN;
 
-    const minBx = Math.floor(minX / 16);
-    const maxBx = Math.ceil(maxX / 16);
-    const minBz = Math.floor(minZ / 16);
-    const maxBz = Math.ceil(maxZ / 16);
+    // Camera-centered symmetrical clamping prevents one-sided cutoffs when viewing wide/pitched horizons
+    const MAX_RADIUS_BLOCKS = 140; // ~2240 Luanti nodes in all directions from camera center
+    const minBx = Math.max(Math.floor(minX / 16), centerBx - MAX_RADIUS_BLOCKS);
+    const maxBx = Math.min(Math.ceil(maxX / 16), centerBx + MAX_RADIUS_BLOCKS);
+    const minBz = Math.max(Math.floor(minZ / 16), centerBz - MAX_RADIUS_BLOCKS);
+    const maxBz = Math.min(Math.ceil(maxZ / 16), centerBz + MAX_RADIUS_BLOCKS);
 
-    const maxFrustumSpan = 160;
-    const clampedMaxBx = Math.min(maxBx, minBx + maxFrustumSpan);
-    const clampedMaxBz = Math.min(maxBz, minBz + maxFrustumSpan);
-
-    const maxCoordX = (clampedMaxBx + 1) * 16;
-    const maxCoordZ = (clampedMaxBz + 1) * 16;
+    const minCoordX = minBx * 16;
+    const maxCoordX = (maxBx + 1) * 16;
+    const minCoordZ = minBz * 16;
+    const maxCoordZ = (maxBz + 1) * 16;
 
     const features: Array<{
       type: 'Feature';
@@ -205,7 +185,7 @@ export class TreeSpriteService {
       };
     }> = [];
 
-    const MAX_VISIBLE_TREES = 3500;
+    const MAX_VISIBLE_TREES = 14000;
     const viewMode = this.mapStore.viewMode();
     const db = this.mapStore.worldDatabase();
     const blockSurfaces = db?.blockSurfaces;
@@ -225,89 +205,106 @@ export class TreeSpriteService {
         key.includes('emergent') ||
         key.includes('big_tree');
 
-      for (let bz = minBz; bz <= clampedMaxBz; bz++) {
-        for (let bx = minBx; bx <= clampedMaxBx; bx++) {
+      // Collect all MapBlocks inside bounds that have tree anchors
+      const candidateBlocks: Array<{ bx: number; bz: number; distSq: number }> = [];
+      for (let bz = minBz; bz <= maxBz; bz++) {
+        for (let bx = minBx; bx <= maxBx; bx++) {
+          const blk = blockSurfaces.get(`${bx},${bz}`);
+          if (blk?.treeAnchors && blk.treeAnchors.length > 0) {
+            const dx = bx - centerBx;
+            const dz = bz - centerBz;
+            candidateBlocks.push({ bx, bz, distSq: dx * dx + dz * dz });
+          }
+        }
+      }
+
+      // Sort candidate blocks radially outward from camera center so the center and foreground
+      // are ALWAYS populated with 100% density, never cutting off asymmetrically!
+      candidateBlocks.sort((a, b) => a.distSq - b.distSq);
+
+      for (let cIdx = 0; cIdx < candidateBlocks.length; cIdx++) {
+        if (features.length >= MAX_VISIBLE_TREES) break;
+
+        const { bx, bz } = candidateBlocks[cIdx];
+        const blk = blockSurfaces.get(`${bx},${bz}`);
+        const anchors = blk?.treeAnchors;
+        if (!blk || !anchors || anchors.length === 0) continue;
+
+        for (let i = 0; i < anchors.length; i++) {
           if (features.length >= MAX_VISIBLE_TREES) break;
 
-          const blk = blockSurfaces.get(`${bx},${bz}`);
-          const anchors = blk?.treeAnchors;
-          if (!blk || !anchors || anchors.length === 0) continue;
-
-          for (let i = 0; i < anchors.length; i++) {
-            if (features.length >= MAX_VISIBLE_TREES) break;
-
-            const a = anchors[i];
-            const cellIdx = (a.lz << 4) | a.lx;
-            if (
-              blk.extrusionKind &&
-              blk.extrusionKind[cellIdx] === 1 &&
-              (!blk.extrusionSpan || blk.extrusionSpan[cellIdx] >= 2)
-            ) {
-              continue;
-            }
-            if (blk.topY[cellIdx] > a.y + 14) {
-              continue;
-            }
-
-            const wx = bx * 16 + a.lx;
-            const wz = bz * 16 + a.lz;
-
-            if (wx < minX || wx > maxCoordX || wz < minZ || wz > maxCoordZ) continue;
-
-            const isDecoOrCrop = isDecorationOrCropKey(a.saplingKey);
-            const giant = !isDecoOrCrop && isGiant(a.saplingKey);
-            const mergeRadius = isDecoOrCrop ? 2 : giant ? 5 : 3;
-
-            // Check spatial grid in neighboring cells
-            const cx = Math.floor(wx / CELL_SIZE);
-            const cz = Math.floor(wz / CELL_SIZE);
-            const searchCellRange = giant ? 2 : 1;
-            let merged = false;
-
-            for (let dcx = -searchCellRange; dcx <= searchCellRange && !merged; dcx++) {
-              for (let dcz = -searchCellRange; dcz <= searchCellRange && !merged; dcz++) {
-                const cellKey = `${cx + dcx},${cz + dcz}`;
-                const neighbor = spatialGrid.get(cellKey);
-                if (
-                  neighbor &&
-                  neighbor.saplingKey === a.saplingKey &&
-                  Math.abs(neighbor.wx - wx) <= mergeRadius &&
-                  Math.abs(neighbor.wz - wz) <= mergeRadius
-                ) {
-                  merged = true;
-                  const newScale = Math.max(neighbor.scale, a.scale ?? 1.0);
-                  neighbor.scale = newScale;
-                  features[neighbor.featureIdx].properties.scale = newScale;
-                }
-              }
-            }
-
-            if (merged) continue;
-
-            const [lng, lat] = this.projection.luantiToLngLat(wx, wz);
-            const featureIdx = features.length;
-            const scale = a.scale ?? 1.0;
-
-            features.push({
-              type: 'Feature',
-              properties: {
-                saplingKey: a.saplingKey,
-                scale
-              },
-              geometry: {
-                type: 'Point',
-                coordinates: [lng, lat]
-              }
-            });
-
-            spatialGrid.set(`${cx},${cz}`, {
-              wx,
-              wz,
-              saplingKey: a.saplingKey,
-              scale,
-              featureIdx
-            });
+          const a = anchors[i];
+          const cellIdx = (a.lz << 4) | a.lx;
+          if (
+            blk.extrusionKind &&
+            blk.extrusionKind[cellIdx] === 1 &&
+            (!blk.extrusionSpan || blk.extrusionSpan[cellIdx] >= 2)
+          ) {
+            continue;
           }
+          // Tolerate tall tree canopies (up to 36 nodes above base) while culling underground cave trees
+          if (blk.topY[cellIdx] > a.y + 36) {
+            continue;
+          }
+
+          const wx = bx * 16 + a.lx;
+          const wz = bz * 16 + a.lz;
+
+          if (wx < minCoordX || wx > maxCoordX || wz < minCoordZ || wz > maxCoordZ) continue;
+
+          const isDecoOrCrop = isDecorationOrCropKey(a.saplingKey);
+          const giant = !isDecoOrCrop && isGiant(a.saplingKey);
+          const mergeRadius = isDecoOrCrop ? 2 : giant ? 5 : 3;
+
+          // Check spatial grid in neighboring cells
+          const cx = Math.floor(wx / CELL_SIZE);
+          const cz = Math.floor(wz / CELL_SIZE);
+          const searchCellRange = giant ? 2 : 1;
+          let merged = false;
+
+          for (let dcx = -searchCellRange; dcx <= searchCellRange && !merged; dcx++) {
+            for (let dcz = -searchCellRange; dcz <= searchCellRange && !merged; dcz++) {
+              const cellKey = `${cx + dcx},${cz + dcz}`;
+              const neighbor = spatialGrid.get(cellKey);
+              if (
+                neighbor &&
+                neighbor.saplingKey === a.saplingKey &&
+                Math.abs(neighbor.wx - wx) <= mergeRadius &&
+                Math.abs(neighbor.wz - wz) <= mergeRadius
+              ) {
+                merged = true;
+                const newScale = Math.max(neighbor.scale, a.scale ?? 1.0);
+                neighbor.scale = newScale;
+                features[neighbor.featureIdx].properties.scale = newScale;
+              }
+            }
+          }
+
+          if (merged) continue;
+
+          const [lng, lat] = this.projection.luantiToLngLat(wx, wz);
+          const featureIdx = features.length;
+          const scale = a.scale ?? 1.0;
+
+          features.push({
+            type: 'Feature',
+            properties: {
+              saplingKey: a.saplingKey,
+              scale
+            },
+            geometry: {
+              type: 'Point',
+              coordinates: [lng, lat]
+            }
+          });
+
+          spatialGrid.set(`${cx},${cz}`, {
+            wx,
+            wz,
+            saplingKey: a.saplingKey,
+            scale,
+            featureIdx
+          });
         }
       }
     }
