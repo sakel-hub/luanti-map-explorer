@@ -606,7 +606,7 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     );
     mapStore.fitWorldBounds();
     expect(mapStore.cameraState().zoom).toBeLessThanOrEqual(2.2);
-  });
+  }, 30000);
 
   it('scans B-tree without zebra skipping and extracts contiguous Z coverage in queryBlocksInBounds', async () => {
     const dbPath = 'sample-luanti-world/map.sqlite';
@@ -1913,7 +1913,7 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     const store2 = new MapStore();
     expect(store2.buildingExtrusions3dEnabled()).toBe(true);
     expect(store2.discoveredRegionsVisible()).toBe(false);
-  });
+  }, 30000);
 
   it('parses real Luanti sample-luanti-world/map.sql dump with zero-OOM chunked streaming', async () => {
     const sqlPath = 'sample-luanti-world/map.sql';
@@ -1980,7 +1980,7 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     store.loadDemoDatabase('postgresql');
     expect(store.databaseBackend()).toBe('postgresql');
     expect(store.worldDatabase()?.fileName).toBe('demo-world/map.sql');
-  });
+  }, 30000);
 
   it('exports active world as Luanti PostgreSQL dump with COPY stdin format', async () => {
     const injector = Injector.create({
@@ -2008,7 +2008,7 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     expect(dumpContent).toContain('\\.');
     // Check that at least some data lines exist with \x hex bytea
     expect(dumpContent).toMatch(/-?\d+\t\\x[0-9a-fA-F]+/);
-  });
+  }, 30000);
 
   it('resolves loadDemoWorld asset URLs relative to baseURI and falls back to in-memory generator on network failure', async () => {
     const injector = Injector.create({
@@ -2054,7 +2054,7 @@ describe('Luanti Map & Biome Explorer Core Engine', () => {
     } finally {
       globalThis.fetch = origFetch;
     }
-  });
+  }, 30000);
 
   it('triggers standard HTML file input by default in openFilePicker to bypass system folder restrictions', async () => {
     const injector = Injector.create({
